@@ -20,6 +20,7 @@ use App\Http\Controllers\RunbookController;
 use App\Http\Controllers\VmController;
 use App\Http\Controllers\ImportacionController;
 use App\Http\Controllers\IncidenciaController;
+use App\Http\Controllers\MapaController;
 use App\Http\Controllers\MantenimientoController;
 use App\Http\Controllers\MetricaController;
 use App\Http\Controllers\PerfilController;
@@ -110,6 +111,8 @@ Route::middleware('auth.jwt')->group(function () use ($crud) {
         [RecursoController::class, 'interfazPercentil'])->whereNumber('id')->whereNumber('ifIndex');
     // Ruta de red (traceroute por salto) de un recurso.
     Route::get('recursos/{id}/ruta', [RecursoController::class, 'ruta'])->whereNumber('id');
+    // Mapa geográfico: enlaces (con coords y estado) + sedes. Ligero, para miles de puntos.
+    Route::get('mapa', [MapaController::class, 'index']);
 
     // Reportes (lectura): disponibilidad/SLA por recurso en un periodo.
     Route::get('reportes/disponibilidad', [ReporteController::class, 'disponibilidad']);

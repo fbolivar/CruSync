@@ -117,6 +117,7 @@ export class Recursos implements OnInit {
       tipo: 'tipo', sitio: 'sitio', sede: 'sitio', community: 'community', comunidad: 'community',
       snmp_version: 'snmp_version', version: 'snmp_version', intervalo: 'intervalo_segundos',
       intervalo_segundos: 'intervalo_segundos', interfaces: 'interfaces', descripcion: 'descripcion',
+      latitud: 'latitud', lat: 'latitud', longitud: 'longitud', lon: 'longitud', lng: 'longitud',
     };
     const norm = (s: string) => s.trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -145,8 +146,8 @@ export class Recursos implements OnInit {
   }
 
   plantillaCsv(): void {
-    const contenido = 'nombre,hostname,tipo,sitio,community,snmp_version,intervalo_segundos,interfaces,descripcion\r\n'
-      + 'ENLACE EJEMPLO - SEDE X,10.0.0.1,fibra_wan,Nivel Central,public,2c,120,true,Enlace WAN de ejemplo\r\n';
+    const contenido = 'nombre,hostname,tipo,sitio,community,snmp_version,intervalo_segundos,interfaces,latitud,longitud,descripcion\r\n'
+      + 'ENLACE EJEMPLO - SEDE X,10.0.0.1,fibra_wan,Nivel Central,public,2c,120,true,4.711,-74.072,Enlace WAN de ejemplo\r\n';
     const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'plantilla_enlaces.csv'; a.click();

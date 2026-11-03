@@ -1,14 +1,30 @@
 <div class="head">
-  <h1>Sedes</h1>
-  <div class="kpis">
-    <div class="kpi"><b>{{ totalSedes() }}</b><span>Sedes</span></div>
-    <div class="kpi" [class.alerta]="sedesConProblemas() > 0">
-      <b>{{ sedesConProblemas() }}</b><span>Con problemas</span>
-    </div>
-    <div class="kpi" [class.alerta]="recursosCaidos() > 0">
-      <b>{{ recursosCaidos() }}</b><span>Recursos caídos</span>
-    </div>
+  <h1>Mapa</h1>
+  <div class="toggle">
+    <button class="btn" [class.btn-primary]="vista() === 'sedes'" (click)="vista.set('sedes')">Por sede</button>
+    <button class="btn" [class.btn-primary]="vista() === 'enlaces'" (click)="vista.set('enlaces')">Por enlace</button>
   </div>
+  @if (vista() === 'sedes') {
+    <div class="kpis">
+      <div class="kpi"><b>{{ totalSedes() }}</b><span>Sedes</span></div>
+      <div class="kpi" [class.alerta]="sedesConProblemas() > 0">
+        <b>{{ sedesConProblemas() }}</b><span>Con problemas</span>
+      </div>
+      <div class="kpi" [class.alerta]="recursosCaidos() > 0">
+        <b>{{ recursosCaidos() }}</b><span>Recursos caídos</span>
+      </div>
+    </div>
+  } @else {
+    <div class="kpis">
+      <div class="kpi"><b>{{ enlacesConCoord() }}</b><span>Enlaces en mapa</span></div>
+      <div class="kpi" [class.alerta]="enlacesDegradados() > 0">
+        <b>{{ enlacesDegradados() }}</b><span>Degradados</span>
+      </div>
+      <div class="kpi" [class.alerta]="enlacesCaidos() > 0">
+        <b>{{ enlacesCaidos() }}</b><span>Caídos</span>
+      </div>
+    </div>
+  }
   <div class="leyenda">
     <span><i style="background:#1b8a3a"></i>Operativo</span>
     <span><i style="background:#e0a400"></i>Degradado</span>
@@ -38,26 +54,73 @@
             </path>
           }
         </g>
-        @for (m of marcadores(); track m.sitio.id) {
-          <a [routerLink]="['/recursos']" [queryParams]="{ sitio: m.sitio.id }"
-             (mouseenter)="hoverId.set(m.sitio.id)" (mouseleave)="hoverId.set(null)">
-            <g [class.activo]="hoverId() === m.sitio.id">
-              @if (hayProblema(m)) {
-                <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m) + 5"
-                        [attr.fill]="color(m.estado)" class="pulso" />
-              }
-              <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m)"
-                      [attr.fill]="color(m.estado)" class="sede" />
-              @if (hayProblema(m) || m.total > 1) {
-                <text [attr.x]="m.x" [attr.y]="m.y" class="num">{{ m.total }}</text>
-              }
-              <title>{{ m.sitio.nombre }} — {{ m.total }} recurso(s){{ m.down ? ', ' + m.down + ' caído(s)' : '' }}</title>
-            </g>
-          </a>
+        @if (vista() === 'sedes') {
+          @for (m of marcadores(); track m.sitio.id) {
+            <a [routerLink]="['/recursos']" [queryParams]="{ sitio: m.sitio.id }"
+               (mouseenter)="hoverId.set(m.sitio.id)" (mouseleave)="hoverId.set(null)">
+              <g [class.activo]="hoverId() === m.sitio.id">
+                @if (hayProblema(m)) {
+                  <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m) + 5"
+                          [attr.fill]="color(m.estado)" class="pulso" />
+                }
+                <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m)"
+                        [attr.fill]="color(m.estado)" class="sede" />
+                @if (hayProblema(m) || m.total > 1) {
+                  <text [attr.x]="m.x" [attr.y]="m.y" class="num">{{ m.total }}</text>
+                }
+                <title>{{ m.sitio.nombre }} — {{ m.total }} recurso(s){{ m.down ? ', ' + m.down + ' caído(s)' : '' }}</title>
+              </g>
+            </a>
+          }
+        } @else {
+          @for (m of marcadoresEnlaces(); track m.enlace.id) {
+            <a [routerLink]="['/recursos', m.enlace.id]"
+               (mouseenter)="hoverEnlace.set(m.enlace.id)" (mouseleave)="hoverEnlace.set(null)">
+              <g [class.activo]="hoverEnlace() === m.enlace.id">
+                @if (m.estado === 'down' || m.estado === 'degraded') {
+                  <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radioEnlace(m) + 4"
+                          [attr.fill]="color(m.estado)" class="pulso" />
+                }
+                <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radioEnlace(m)"
+                        [attr.fill]="color(m.estado)" class="enlace" />
+                <title>{{ m.enlace.nombre }} — {{ m.estado }}{{ m.propia ? '' : ' (ubicación de la sede)' }}</title>
+              </g>
+            </a>
+          }
         }
       </svg>
     </div>
 
+    <!-- Panel lateral -->
+    @if (vista() === 'enlaces') {
+      <div class="panel card">
+        <div class="panel-h">Enlaces con alerta <span class="text-dim">· {{ enlacesProblema().length }}</span></div>
+        @if (enlacesProblema().length === 0) {
+          <p class="text-dim vacio">Sin enlaces caídos o degradados. 🟢</p>
+        } @else {
+          <ul class="lista">
+            @for (e of enlacesProblema(); track e.id) {
+              <li>
+                <a [routerLink]="['/recursos', e.id]"
+                   [class.activo]="hoverEnlace() === e.id"
+                   (mouseenter)="hoverEnlace.set(e.id)" (mouseleave)="hoverEnlace.set(null)">
+                  <i class="dot" [style.background]="color(e.estado_actual)"></i>
+                  <div class="info">
+                    <b>{{ e.nombre }}</b>
+                    <span class="text-dim">{{ e.tipo_codigo }}</span>
+                  </div>
+                  <div class="chips">
+                    <span class="chip" [class.down]="e.estado_actual === 'down'"
+                          [class.degr]="e.estado_actual === 'degraded'">{{ e.estado_actual }}</span>
+                  </div>
+                  <span class="ir">›</span>
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    } @else {
     <!-- Panel de sedes (incluye las sin coordenadas) -->
     <div class="panel card">
       <div class="panel-h">Sedes <span class="text-dim">· peor estado primero</span></div>
@@ -86,6 +149,7 @@
         }
       </ul>
     </div>
+    }
   </div>
 
   @if (totalSedes() === 0) {

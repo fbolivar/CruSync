@@ -561,6 +561,21 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
   para 1200 enlaces desde el worker central, subir `SCHEDULER_MAX_WORKERS` (.env) y escalonar intervalos;
   si se reparten por regiones, usar pollers distribuidos (`WORKER_SITIOS`).
 
+- ✅ GEORREFERENCIACIÓN POR ENLACE EN EL MAPA (2026-11-03) [migr. 0044] — `ng build` OK. El mapa marcaba
+  solo por SEDE (sitios con lat/lon); ahora cada ENLACE/recurso se puede ubicar individualmente y se
+  pinta con semáforo (verde=up, amarillo=degraded, rojo=down, gris=unknown, azul=mantenimiento; los
+  caídos/degradados parpadean).
+  - **BD** migr. 0044: `recursos.latitud`/`longitud` (nullable, con rango). Si un recurso no tiene coords
+    propias, el mapa cae a las de su sede.
+  - **API**: `GET /mapa` (`MapaController`, ligero para miles de puntos, respeta alcance) devuelve
+    `{sitios, enlaces}` (cada enlace con estado + coords propias). `RecursoController` acepta
+    latitud/longitud (rules + fillable + cast float). El **importador masivo** acepta columnas
+    `latitud`/`longitud` (alias lat/lon/lng, coma decimal tolerada) → cada enlace del CSV queda ubicado.
+  - **UI** (pantalla Mapa): toggle **Por sede / Por enlace**. En "Por enlace" dibuja un punto por recurso
+    con coords (propias o heredadas de la sede), coloreado por estado, clic → detalle; panel lateral
+    lista los enlaces con alerta (caído/degradado). KPIs por vista.
+  - La plantilla CSV del importador y la ayuda incluyen latitud/longitud.
+
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.
 

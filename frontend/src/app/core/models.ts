@@ -103,6 +103,17 @@ export interface Interfaz {
   ts: string;
 }
 
+export interface EnlaceMapa {
+  id: number;
+  nombre: string;
+  tipo_codigo: string;
+  sitio_id: number | null;
+  estado_actual: Estado;
+  latitud: number | string | null;   // propias del recurso (null = usa las de su sede)
+  longitud: number | string | null;
+}
+export interface MapaResp { sitios: Sitio[]; enlaces: EnlaceMapa[]; }
+
 export interface ImportacionResultado {
   total: number;
   creados: number;

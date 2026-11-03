@@ -30,7 +30,7 @@
   <div class="card form import">
     <h2>Importar enlaces masivamente</h2>
     <p class="text-dim">
-      Sube un CSV del inventario. Columnas: <code>nombre, hostname, tipo, sitio, community, snmp_version, intervalo_segundos, interfaces, descripcion</code>.
+      Sube un CSV del inventario. Columnas: <code>nombre, hostname, tipo, sitio, community, snmp_version, intervalo_segundos, interfaces, latitud, longitud, descripcion</code>.
       Solo <b>nombre</b> y <b>hostname</b> son obligatorios; lo demás usa los valores por defecto de abajo.
       Reimportar NO duplica (actualiza por hostname).
       <button type="button" class="btn btn-sm" (click)="plantillaCsv()">Descargar plantilla</button>

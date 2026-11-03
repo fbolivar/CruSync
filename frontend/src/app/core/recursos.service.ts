@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Baseline, FlujoOverview, FlujosResp, HardwareResp, ImportacionResultado, Interfaz, MuestraInterfaz, Paginated, PercentilBanda, Recurso, Respaldo, RespaldoDetalle, SaltoRuta, Sitio, TipoRecurso, TopologiaResp, VecinoLldp, WanCalidadResp } from './models';
+import { Baseline, FlujoOverview, FlujosResp, HardwareResp, ImportacionResultado, Interfaz, MapaResp, MuestraInterfaz, Paginated, PercentilBanda, Recurso, Respaldo, RespaldoDetalle, SaltoRuta, Sitio, TipoRecurso, TopologiaResp, VecinoLldp, WanCalidadResp } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class RecursosService {
@@ -12,6 +12,10 @@ export class RecursosService {
   }
   obtener(id: number): Observable<Recurso> {
     return this.api.get<Recurso>(`/recursos/${id}`);
+  }
+  /** Datos del mapa geográfico (enlaces con coords/estado + sedes). */
+  mapa(): Observable<MapaResp> {
+    return this.api.get<MapaResp>('/mapa');
   }
   /** Alta masiva desde inventario (CSV parseado a filas). */
   importar(body: Record<string, unknown>): Observable<ImportacionResultado> {

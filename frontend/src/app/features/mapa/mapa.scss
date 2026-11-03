@@ -34,6 +34,11 @@ svg { width: 100%; max-width: 470px; height: auto; }
 .pais .dep:hover { fill: #b6d8be; }
 
 .sede { stroke: #fff; stroke-width: 1.5; transition: r .12s; }
+.enlace { stroke: #fff; stroke-width: 0.8; transition: r .12s; cursor: pointer; }
+g.activo .enlace { stroke: #111; stroke-width: 1.8; }
+.toggle { display: flex; gap: 6px; }
+.toggle .btn { padding: 4px 12px; }
+.vacio { padding: 14px; }
 .num { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 a { cursor: pointer; }
 g.activo .sede { stroke: #111; stroke-width: 2.5; }

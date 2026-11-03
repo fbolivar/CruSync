@@ -314,6 +314,9 @@ class RecursoController extends Controller
             'max_check_attempts' => ['nullable', 'integer', 'between:1,10'],
             // Objetivo de disponibilidad % (NULL = hereda el del tipo).
             'sla_objetivo'       => ['nullable', 'numeric', 'between:0,100'],
+            // Georreferenciación propia (NULL = usa la de su sede en el mapa).
+            'latitud'            => ['nullable', 'numeric', 'between:-90,90'],
+            'longitud'           => ['nullable', 'numeric', 'between:-180,180'],
             // Secretos en claro (jsonb). Se cifran de forma transparente. Nunca se devuelven.
             'secretos'           => ['nullable', 'array'],
         ];

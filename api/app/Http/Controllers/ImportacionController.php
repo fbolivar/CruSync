@@ -99,6 +99,10 @@ class ImportacionController extends Controller
                 $intervalo = (int) ($fila['intervalo_segundos'] ?? $defIntervalo);
                 $ifaces = array_key_exists('interfaces', $fila) ? (bool) $fila['interfaces'] : $defIfaces;
 
+                // Georreferenciación (opcional): coma decimal tolerada ("4,6" -> 4.6).
+                $lat = $this->coord($fila['latitud'] ?? null, -90, 90);
+                $lon = $this->coord($fila['longitud'] ?? null, -180, 180);
+
                 $parametros = ['metodo' => 'snmp', 'snmp_version' => $ver, 'interfaces' => $ifaces];
                 $datos = [
                     'tipo_id'            => $tipoId,
@@ -109,6 +113,8 @@ class ImportacionController extends Controller
                     'parametros'         => $parametros,
                     'intervalo_segundos' => $intervalo,
                     'activo'             => $defActivo,
+                    'latitud'            => $lat,
+                    'longitud'           => $lon,
                 ];
 
                 $k = mb_strtolower($hostname);
@@ -141,6 +147,19 @@ class ImportacionController extends Controller
             'con_error'    => count($errores),
             'errores'      => array_slice($errores, 0, 200), // tope para no devolver miles
         ]);
+    }
+
+    /** Coordenada opcional: null si vacía; tolera coma decimal; valida el rango. */
+    private function coord($v, float $min, float $max): ?float
+    {
+        if ($v === null || trim((string) $v) === '') {
+            return null;
+        }
+        $n = (float) str_replace(',', '.', trim((string) $v));
+        if ($n < $min || $n > $max) {
+            throw new \RuntimeException('coordenada fuera de rango');
+        }
+        return $n;
     }
 
     /** Normaliza la versión SNMP a '2c' o 'v3' como espera el worker. */

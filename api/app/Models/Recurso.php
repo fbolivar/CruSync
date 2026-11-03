@@ -21,6 +21,8 @@ class Recurso extends Model
         'max_check_attempts',
         // Objetivo de disponibilidad % (pisa al del tipo; NULL = hereda).
         'sla_objetivo',
+        // Georreferenciación propia del recurso (NULL = usa la de su sede).
+        'latitud', 'longitud',
     ];
 
     // La columna binaria cifrada nunca se serializa.
@@ -33,6 +35,8 @@ class Recurso extends Model
         'ultimo_chequeo_at'  => 'datetime',
         'max_check_attempts' => 'integer',
         'intentos_estado'    => 'integer',
+        'latitud'            => 'float',
+        'longitud'           => 'float',
     ];
 
     protected $attributes = [
