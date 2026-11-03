@@ -103,6 +103,14 @@ export interface Interfaz {
   ts: string;
 }
 
+export interface ImportacionResultado {
+  total: number;
+  creados: number;
+  actualizados: number;
+  con_error: number;
+  errores: { fila: number; nombre: string; error: string }[];
+}
+
 export interface FilaBandaReporte {
   nombre: string;
   tipo_nombre: string;

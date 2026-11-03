@@ -14,5 +14,10 @@ h2 { font-size: 14px; margin: 0 0 10px; }
 
 .acc { display: flex; gap: 6px; }
 .acc .btn { padding: 4px 10px; }
+.acc-head { display: flex; gap: 8px; }
+.btn-sm { padding: 2px 8px; font-size: 11px; margin-left: 6px; }
+.import code { font-size: 11px; background: var(--bg, #f5f7f5); padding: 1px 4px; border-radius: 3px; }
+.import-res { padding: 8px 10px; background: var(--bg, #f5f7f5); border-radius: var(--radius); font-size: 13px; }
+.import-res ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; max-height: 180px; overflow: auto; }
 
 .err { color: var(--sev-critical); }

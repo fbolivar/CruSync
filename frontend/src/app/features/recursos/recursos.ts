@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
-import { Recurso, Sitio, TipoRecurso } from '../../core/models';
+import { ImportacionResultado, Recurso, Sitio, TipoRecurso } from '../../core/models';
 import { RecursosService } from '../../core/recursos.service';
 import { EstadoBadge } from '../../shared/estado-badge';
 
@@ -73,6 +73,100 @@ export class Recursos implements OnInit {
     this.svc.listar().subscribe({
       next: (p) => { this.recursos.set(p.data); this.cargando.set(false); },
       error: () => { this.error.set('No se pudieron cargar los recursos.'); this.cargando.set(false); },
+    });
+  }
+
+  // ── Importación masiva ──────────────────────────────────────────────
+  importando = signal(false);
+  impFilas = signal<Record<string, string>[]>([]);
+  impArchivo = signal<string>('');
+  impResultado = signal<ImportacionResultado | null>(null);
+  impError = signal<string | null>(null);
+  impEnviando = signal(false);
+  impDef = {
+    tipo: 'fibra_wan', community: '', snmp_version: '2c' as '2c' | 'v3',
+    intervalo_segundos: 120, interfaces: true, activo: true, sitio: '',
+  };
+
+  abrirImport(): void {
+    this.importando.set(true);
+    this.impFilas.set([]); this.impArchivo.set(''); this.impResultado.set(null); this.impError.set(null);
+  }
+  cerrarImport(): void { this.importando.set(false); }
+
+  /** Lee el CSV elegido y lo convierte en filas (cabecera → claves normalizadas). */
+  onArchivoImport(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.impArchivo.set(file.name);
+    this.impResultado.set(null); this.impError.set(null);
+    const lector = new FileReader();
+    lector.onload = () => {
+      try { this.impFilas.set(this.parseCsv(String(lector.result ?? ''))); }
+      catch { this.impError.set('No se pudo leer el CSV.'); this.impFilas.set([]); }
+    };
+    lector.readAsText(file, 'utf-8');
+  }
+
+  private parseCsv(texto: string): Record<string, string>[] {
+    const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+    if (lineas.length < 2) return [];
+    const alias: Record<string, string> = {
+      nombre: 'nombre', hostname: 'hostname', ip: 'hostname', direccion: 'hostname',
+      tipo: 'tipo', sitio: 'sitio', sede: 'sitio', community: 'community', comunidad: 'community',
+      snmp_version: 'snmp_version', version: 'snmp_version', intervalo: 'intervalo_segundos',
+      intervalo_segundos: 'intervalo_segundos', interfaces: 'interfaces', descripcion: 'descripcion',
+    };
+    const norm = (s: string) => s.trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const cab = this.csvLinea(lineas[0]).map((c) => alias[norm(c)] ?? norm(c));
+    const filas: Record<string, string>[] = [];
+    for (let i = 1; i < lineas.length; i++) {
+      const celdas = this.csvLinea(lineas[i]);
+      const fila: Record<string, string> = {};
+      cab.forEach((k, j) => { if (k) fila[k] = (celdas[j] ?? '').trim(); });
+      if ((fila['nombre'] || fila['hostname'])) filas.push(fila);
+    }
+    return filas;
+  }
+
+  /** Parser de una línea CSV con soporte de comillas dobles. */
+  private csvLinea(linea: string): string[] {
+    const out: string[] = []; let cur = ''; let dentro = false;
+    for (let i = 0; i < linea.length; i++) {
+      const ch = linea[i];
+      if (ch === '"') {
+        if (dentro && linea[i + 1] === '"') { cur += '"'; i++; } else { dentro = !dentro; }
+      } else if (ch === ',' && !dentro) { out.push(cur); cur = ''; } else { cur += ch; }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  plantillaCsv(): void {
+    const contenido = 'nombre,hostname,tipo,sitio,community,snmp_version,intervalo_segundos,interfaces,descripcion\r\n'
+      + 'ENLACE EJEMPLO - SEDE X,10.0.0.1,fibra_wan,Nivel Central,public,2c,120,true,Enlace WAN de ejemplo\r\n';
+    const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'plantilla_enlaces.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  enviarImport(): void {
+    if (this.impFilas().length === 0) { this.impError.set('Carga un CSV con al menos una fila.'); return; }
+    this.impError.set(null); this.impEnviando.set(true); this.impResultado.set(null);
+    const d = this.impDef;
+    this.svc.importar({
+      tipo: d.tipo, community: d.community || null, snmp_version: d.snmp_version,
+      intervalo_segundos: d.intervalo_segundos, interfaces: d.interfaces, activo: d.activo,
+      sitio: d.sitio || null, filas: this.impFilas(),
+    }).subscribe({
+      next: (r) => { this.impResultado.set(r); this.impEnviando.set(false); this.cargar(); },
+      error: (e) => {
+        this.impError.set((e as { error?: { message?: string } })?.error?.message ?? 'Error al importar.');
+        this.impEnviando.set(false);
+      },
     });
   }
 

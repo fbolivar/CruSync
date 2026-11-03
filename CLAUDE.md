@@ -546,6 +546,21 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
     normalizada titulo/subtitulo/kpis/tablas, respeta el alcance por usuario). Así los 4 informes se ven
     y exportan en PDF/CSV desde la pantalla, además de programarse por correo.
 
+- ✅ ALTA MASIVA DE RECURSOS (onboarding a escala, p.ej. 1200 enlaces SNMP) (2026-11-03) — `ng build` OK.
+  Para no dar de alta uno a uno a gran escala: importación por CSV. El frontend parsea el CSV (cabecera
+  con alias/acentos tolerados) y envía las filas como JSON a `POST /recursos/importar`
+  (`ImportacionController`, admin/operador). Por fila: resuelve tipo (codigo) y sitio (por nombre), arma
+  `parametros={metodo:'snmp', snmp_version, interfaces}`, cifra la `community` en secretos
+  (`snmp_community`) y hace **UPSERT por hostname** (reimportar no duplica). Cada fila es independiente
+  (una mala no aborta el lote); devuelve resumen {total, creados, actualizados, con_error, errores[]}.
+  Valores por defecto del lote (tipo/community/versión/intervalo/interfaces/activo/sitio) que una fila
+  puede pisar. Respeta el alcance por usuario (un operador acotado no importa fuera de sus sitios).
+  UI: botón "⇪ Importar masivo" en Recursos → panel con defaults, selector de archivo, "Descargar
+  plantilla", preview de filas y resumen con errores por fila. Modelo por enlace: SNMP de alcance
+  (sysUpTime → up/down) + tráfico de interfaz WAN (IF-MIB, opt-in `interfaces=true`). NOTA de escala:
+  para 1200 enlaces desde el worker central, subir `SCHEDULER_MAX_WORKERS` (.env) y escalonar intervalos;
+  si se reparten por regiones, usar pollers distribuidos (`WORKER_SITIOS`).
+
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.
 

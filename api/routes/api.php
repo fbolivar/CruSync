@@ -18,6 +18,7 @@ use App\Http\Controllers\PushController;
 use App\Http\Controllers\RumController;
 use App\Http\Controllers\RunbookController;
 use App\Http\Controllers\VmController;
+use App\Http\Controllers\ImportacionController;
 use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\MantenimientoController;
 use App\Http\Controllers\MetricaController;
@@ -194,6 +195,9 @@ Route::middleware('auth.jwt')->group(function () use ($crud) {
         // Marcar interfaz como monitoreada (alertar si cae).
         Route::match(['put', 'patch'], 'recursos/{id}/interfaces/{ifIndex}',
             [RecursoController::class, 'actualizarInterfaz'])->whereNumber('id')->whereNumber('ifIndex');
+
+        // Alta MASIVA de recursos desde inventario (CSV→JSON). Onboarding a escala.
+        Route::post('recursos/importar', [ImportacionController::class, 'importar']);
 
         // Gestión de incidencias (reconocer / resolver).
         Route::post('incidencias/{id}/reconocer', [IncidenciaController::class, 'reconocer'])->whereNumber('id');
