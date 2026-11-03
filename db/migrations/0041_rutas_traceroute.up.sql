@@ -24,4 +24,17 @@ CREATE TABLE IF NOT EXISTS rutas (
 COMMENT ON TABLE rutas IS
   'Última ruta de red (traceroute por salto) por recurso. La reemplaza el job recolectar_rutas del worker.';
 
+-- Dueño = rol de la app y lectura para Grafana (mismo patrón que el resto de
+-- tablas). Defensivo: si la migración se aplica como 'postgres' en vez de como
+-- 'monitoreo', deja los privilegios correctos igualmente.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'monitoreo') THEN
+    EXECUTE 'ALTER TABLE rutas OWNER TO monitoreo';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'grafana_ro') THEN
+    EXECUTE 'GRANT SELECT ON rutas TO grafana_ro';
+  END IF;
+END $$;
+
 COMMIT;
