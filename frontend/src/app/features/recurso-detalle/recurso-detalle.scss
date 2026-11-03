@@ -39,6 +39,12 @@ section { margin-top: 8px; }
 .ifaces .umbral-in { width: 42px; font-size: 11px; padding: 1px 3px;
   text-align: right; border: 1px solid var(--border, #ccc); border-radius: 3px; }
 .ifaces .btn-sm { padding: 1px 6px; font-size: 11px; margin-left: 2px; }
+.ifaces .p95 { margin-top: 8px; font-size: 12px; padding: 6px 10px;
+  background: var(--bg, #f5f7f5); border-radius: var(--radius); border-left: 3px solid var(--accent, #2e7d32); }
+
+.ruta { width: 100%; font-size: 12px; }
+.ruta .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ruta tr.hop-perdida td { color: var(--text-dim); font-style: italic; }
 .ifaces tr.if-fila { cursor: pointer; }
 .ifaces tr.if-fila:hover td { background: var(--bg-2, #f5f7f5); }
 .ifaces .ver-g { color: var(--text-dim); font-size: 10px; }

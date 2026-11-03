@@ -104,6 +104,11 @@ Route::middleware('auth.jwt')->group(function () use ($crud) {
     Route::get('recursos/{id}/interfaces', [RecursoController::class, 'interfaces'])->whereNumber('id');
     Route::get('recursos/{id}/interfaces/{ifIndex}/historico',
         [RecursoController::class, 'interfazHistorico'])->whereNumber('id')->whereNumber('ifIndex');
+    // Percentil 95 de ancho de banda de una interfaz (facturación ISP).
+    Route::get('recursos/{id}/interfaces/{ifIndex}/percentil',
+        [RecursoController::class, 'interfazPercentil'])->whereNumber('id')->whereNumber('ifIndex');
+    // Ruta de red (traceroute por salto) de un recurso.
+    Route::get('recursos/{id}/ruta', [RecursoController::class, 'ruta'])->whereNumber('id');
 
     // Reportes (lectura): disponibilidad/SLA por recurso en un periodo.
     Route::get('reportes/disponibilidad', [ReporteController::class, 'disponibilidad']);

@@ -2,7 +2,7 @@ import { DecimalPipe, JsonPipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Baseline, Chequeo, HardwareComponente, HardwareInventario, Incidencia, Interfaz, Metrica, MuestraInterfaz, PasoSintetico, Recurso, Respaldo, RespaldoDetalle, VecinoLldp, VmResp, WanCalidadResp } from '../../core/models';
+import { Baseline, Chequeo, HardwareComponente, HardwareInventario, Incidencia, Interfaz, Metrica, MuestraInterfaz, PasoSintetico, PercentilBanda, Recurso, Respaldo, RespaldoDetalle, SaltoRuta, VecinoLldp, VmResp, WanCalidadResp } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { OperacionService } from '../../core/operacion.service';
 import { RecursosService } from '../../core/recursos.service';
@@ -40,6 +40,7 @@ export class RecursoDetalle {
   vecinos = signal<VecinoLldp[]>([]);
   wan = signal<WanCalidadResp | null>(null);
   vms = signal<VmResp | null>(null);
+  ruta = signal<SaltoRuta[]>([]);
   respaldoSel = signal<RespaldoDetalle | null>(null);
   respaldoVista = signal<'diff' | 'completo'>('diff');
   rango = signal<'1h' | '24h' | '7d'>('24h');
@@ -50,6 +51,7 @@ export class RecursoDetalle {
   ifRango = signal<'1h' | '24h' | '7d'>('24h');
   ifHist = signal<MuestraInterfaz[]>([]);
   ifCargandoHist = signal(false);
+  ifP95 = signal<PercentilBanda | null>(null);
 
   serieIn = computed<Punto[]>(() => this.ifHist().map((m) => ({ ts: m.ts, valor: m.in_mbps ?? 0 })));
   serieOut = computed<Punto[]>(() => this.ifHist().map((m) => ({ ts: m.ts, valor: m.out_mbps ?? 0 })));
@@ -172,6 +174,11 @@ export class RecursoDetalle {
       next: (v) => this.vms.set(v?.total ? v : null),
       error: () => this.vms.set(null),
     });
+    this.ruta.set([]);
+    this.recursosSvc.ruta(this.id).subscribe({
+      next: (rs) => this.ruta.set(rs),
+      error: () => this.ruta.set([]),
+    });
     this.tele.chequeos({ recurso_id: this.id, per_page: 1 }).subscribe({
       next: (p) => this.ultimoChequeo.set(p.data[0] ?? null),
     });
@@ -205,6 +212,12 @@ export class RecursoDetalle {
     this.recursosSvc.interfazHistorico(this.id, idx, this.ifRango()).subscribe({
       next: (h) => { this.ifHist.set(h); this.ifCargandoHist.set(false); },
       error: () => this.ifCargandoHist.set(false),
+    });
+    // Percentil 95 de banda (facturación ISP) sobre 30 días.
+    this.ifP95.set(null);
+    this.recursosSvc.interfazPercentil(this.id, idx, '30d').subscribe({
+      next: (p) => this.ifP95.set(p?.muestras ? p : null),
+      error: () => this.ifP95.set(null),
     });
   }
 

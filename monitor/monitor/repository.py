@@ -1100,12 +1100,18 @@ def rollup_diario(db: Database) -> None:
 RET_METRICAS_DIAS = 15
 
 
-def purgar_datos(db: Database) -> dict[str, Any]:
+def purgar_datos(db: Database, interfaces_hist_dias: int = 35) -> dict[str, Any]:
     with db.connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT fn_purgar_datos() AS r")
         r = cur.fetchone()["r"]
-        # Histórico de interfaces: retención corta (7 días).
-        cur.execute("DELETE FROM interfaces_historico WHERE ts < now() - interval '7 days'")
+        # Histórico de interfaces: retención configurable. Se mantiene ≥30 días para
+        # poder calcular el PERCENTIL 95 de ancho de banda del periodo de facturación
+        # (métrica ISP, estilo SolarWinds) sobre las muestras crudas.
+        dias = max(1, int(interfaces_hist_dias))
+        cur.execute(
+            "DELETE FROM interfaces_historico WHERE ts < now() - make_interval(days => %s)",
+            (dias,),
+        )
         # Flujos de tráfico (NetFlow): retención corta (7 días).
         cur.execute("DELETE FROM flujos WHERE ventana_fin < now() - interval '7 days'")
         cur.execute("DELETE FROM flujo_totales WHERE ventana_fin < now() - interval '7 days'")
@@ -1185,6 +1191,28 @@ def guardar_wan_calidad(db: Database, recurso_id: int, datos: dict) -> None:
              datos.get("loss_pct"), datos.get("down_mbps"), datos.get("up_mbps"),
              datos.get("mos"), datos.get("calidad")),
         )
+
+
+# ── Traceroute / ruta de red por salto ────────────────────────────────
+def recursos_traceroute(db: Database) -> list[Recurso]:
+    """Recursos activos que optaron por traceroute (parametros.traceroute)."""
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.execute(_SELECT_RECURSO +
+                    " WHERE r.activo = true AND r.parametros ? 'traceroute' ORDER BY r.id")
+        return [_fila_a_recurso(r) for r in cur.fetchall()]
+
+
+def guardar_ruta(db: Database, recurso_id: int, saltos: list[dict], ahora: datetime) -> None:
+    """Reemplaza la ruta del recurso con los saltos dados (una transacción)."""
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM rutas WHERE recurso_id = %s", (recurso_id,))
+        for h in saltos:
+            cur.execute(
+                "INSERT INTO rutas (recurso_id, hop_no, ip, hostname, rtt_ms, perdida, ts) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (recurso_id, h["hop_no"], h.get("ip"), h.get("hostname"),
+                 h.get("rtt_ms"), bool(h.get("perdida")), ahora),
+            )
 
 
 # ── Auto-remediación / runbooks (#5) ──────────────────────────────────

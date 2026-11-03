@@ -202,6 +202,13 @@
                       <app-line-chart [data]="serieOut()" label="Salida" unidad="Mbps" />
                     </div>
                   }
+                  @if (ifP95(); as p) {
+                    <div class="p95" title="El 95 % del tiempo el tráfico estuvo por debajo de este valor (métrica de facturación ISP).">
+                      <b>Percentil 95 (30 d):</b>
+                      ↓ {{ p.p95_in ?? '—' }} Mbps · ↑ {{ p.p95_out ?? '—' }} Mbps
+                      <span class="ver-g">· máx ↓ {{ p.max_in ?? '—' }} / ↑ {{ p.max_out ?? '—' }} Mbps · {{ p.muestras }} muestras</span>
+                    </div>
+                  }
                 </td>
               </tr>
             }
@@ -320,6 +327,25 @@
               <td class="text-dim">{{ v.remote_port ?? '—' }}</td>
               <td class="text-dim mono">{{ v.remote_mgmt ?? '—' }}</td>
               <td class="text-dim mono">{{ v.remote_chassis ?? '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  <!-- Ruta de red (traceroute por salto) -->
+  @if (ruta().length > 0) {
+    <section>
+      <h2>Ruta de red <span class="text-dim">(traceroute · {{ ruta().length }} saltos)</span></h2>
+      <table class="ruta">
+        <thead><tr><th>#</th><th>Salto (IP)</th><th class="num">RTT</th></tr></thead>
+        <tbody>
+          @for (h of ruta(); track h.hop_no) {
+            <tr [class.hop-perdida]="h.perdida">
+              <td class="num text-dim">{{ h.hop_no }}</td>
+              <td>{{ h.perdida ? '* (sin respuesta)' : (h.hostname || h.ip || '—') }}</td>
+              <td class="num">{{ h.rtt_ms != null ? (h.rtt_ms + ' ms') : '—' }}</td>
             </tr>
           }
         </tbody>

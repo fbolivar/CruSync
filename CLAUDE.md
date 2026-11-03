@@ -481,8 +481,23 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
     además de `monitorear` (valida 0-100 y crítico≥warning). Auditado por el alcance.
   - **UI**: en la sección "Interfaces de red" del detalle, la columna Util. se colorea warn/crít según
     el umbral efectivo del puerto, y hay una columna "Umbral util. %" editable (warn/crít por interfaz,
-    gated por rol). Pendiente de verificar EN VIVO en el servidor (migración + pull + restart worker +
-    rebuild frontend). Opcionales futuros: percentil 95 de banda (facturación ISP) y traceroute por salto.
+    gated por rol). VERIFICADO EN VIVO (2026-11-03): migración + pull + restart worker + rebuild frontend;
+    endpoint probado 200/422 con JWT acuñado; 10 interfaces ya ejercen la lógica sin errores.
+
+- ✅ PERCENTIL 95 DE BANDA + TRACEROUTE POR SALTO (2026-11-03) [migr. 0041] — worker 240 tests +
+  `ng build` OK. Los dos "opcionales" para rematar la paridad con SolarWinds/PRTG:
+  - **Percentil 95 de ancho de banda** (métrica de facturación ISP, firma de SolarWinds): el 95% del
+    tiempo el tráfico estuvo por debajo de este valor. `GET /recursos/{id}/interfaces/{ifIndex}/percentil?rango=24h|7d|30d`
+    (`percentile_cont(0.95)` sobre `interfaces_historico` in/out + máx). Para el periodo mensual, la
+    retención del histórico pasó a ser configurable (`INTERFACES_HIST_RETENCION_DIAS`, def **35**;
+    `purgar_datos` la recibe). UI: línea "Percentil 95 (30 d)" en la interfaz expandida.
+  - **Traceroute por salto** (hop-by-hop de SolarWinds / herramienta de ruta de PRTG): localiza en qué
+    tramo del camino se mete latencia/pérdida (Starlink→ISP→destino). Opt-in `parametros.traceroute =
+    true | {target?, max_hops?}`. Worker: `monitor/traceroute.py` (parsers PUROS `parse_traceroute` /
+    `parse_tracepath` + I/O `trazar` con `traceroute -n`, fallback `tracepath`); job `recolectar_rutas`
+    (cada `TRACEROUTE_CHECK_SEG`, def 600s) guarda la última ruta en tabla `rutas` (reemplazo por recurso).
+    API `GET /recursos/{id}/ruta`. UI: sección "Ruta de red" en el detalle (saltos con IP/RTT, marca '*').
+    NOTA: requiere `traceroute` o `tracepath` instalado en el servidor (`apt install traceroute`).
 
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.

@@ -202,6 +202,51 @@ class RecursoController extends Controller
         return response()->json($rows);
     }
 
+    /**
+     * Percentil 95 de ancho de banda de una interfaz (métrica de facturación ISP,
+     * estilo SolarWinds): el 95 % del tiempo el tráfico estuvo por debajo de este
+     * valor. Se calcula sobre las muestras crudas de interfaces_historico.
+     */
+    public function interfazPercentil(Request $request, int $id, int $ifIndex): JsonResponse
+    {
+        $this->exigirAlcance($id);
+        $request->validate(['rango' => ['nullable', 'in:24h,7d,30d']]);
+        $segundos = ['24h' => 86400, '7d' => 604800, '30d' => 2592000][$request->query('rango', '7d')] ?? 604800;
+        $desde = now()->subSeconds($segundos)->toDateTimeString();
+
+        $r = DB::table('interfaces_historico')
+            ->where('recurso_id', $id)->where('if_index', $ifIndex)
+            ->where('ts', '>=', $desde)
+            ->selectRaw(
+                'count(*) as muestras, '.
+                'percentile_cont(0.95) within group (order by in_mbps) as p95_in, '.
+                'percentile_cont(0.95) within group (order by out_mbps) as p95_out, '.
+                'max(in_mbps) as max_in, max(out_mbps) as max_out'
+            )->first();
+
+        $p95 = max((float) ($r->p95_in ?? 0), (float) ($r->p95_out ?? 0));
+        return response()->json([
+            'muestras' => (int) ($r->muestras ?? 0),
+            'p95_in'   => $r->p95_in !== null ? round((float) $r->p95_in, 3) : null,
+            'p95_out'  => $r->p95_out !== null ? round((float) $r->p95_out, 3) : null,
+            'p95'      => ($r->muestras ?? 0) > 0 ? round($p95, 3) : null,
+            'max_in'   => $r->max_in !== null ? round((float) $r->max_in, 3) : null,
+            'max_out'  => $r->max_out !== null ? round((float) $r->max_out, 3) : null,
+        ]);
+    }
+
+    /** Última ruta de red (traceroute por salto) de un recurso opt-in. */
+    public function ruta(int $id): JsonResponse
+    {
+        $this->exigirAlcance($id);
+        $rows = DB::table('rutas')
+            ->where('recurso_id', $id)
+            ->orderBy('hop_no')
+            ->get(['hop_no', 'ip', 'hostname', 'rtt_ms', 'perdida', 'ts']);
+
+        return response()->json($rows);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());

@@ -59,6 +59,19 @@ class Settings:
     if_err_critical: int = _int("IF_ERR_CRITICAL", 0)  # errores/intervalo crítico (0=off)
     if_sat_attempts: int = _int("IF_SAT_ATTEMPTS", 3)  # ciclos seguidos antes de abrir
 
+    # Retención del histórico de throughput por interfaz. Se mantiene ≥30 días para
+    # el PERCENTIL 95 de banda del periodo de facturación (métrica ISP/SolarWinds).
+    interfaces_hist_retencion_dias: int = _int("INTERFACES_HIST_RETENCION_DIAS", 35)
+
+    # Traceroute por salto (ruta de red): localiza DÓNDE se introduce latencia/pérdida
+    # en el camino (Starlink -> ISP -> destino). Opt-in por recurso
+    # (parametros.traceroute = true | {target?, max_hops?}). El job guarda la última
+    # ruta (saltos con RTT) por recurso.
+    traceroute_enabled: bool = _bool("TRACEROUTE_ENABLED", True)
+    traceroute_check_seg: int = _int("TRACEROUTE_CHECK_SEG", 600)
+    traceroute_max_hops: int = _int("TRACEROUTE_MAX_HOPS", 30)
+    traceroute_timeout_seg: int = _int("TRACEROUTE_TIMEOUT_SEG", 2)  # espera por salto
+
     # Scheduler. Chequeos I/O-bound -> conviene un pool amplio para que las sondas
     # SNMP lentas no starven a las web (120s) y estas no se descarten por misfire.
     scheduler_max_workers: int = _int("SCHEDULER_MAX_WORKERS", 50)

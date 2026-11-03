@@ -26,6 +26,7 @@ from .runner import (
     procesar_hardware,
     procesar_virtualizacion,
     pronosticar_capacidad,
+    recolectar_rutas,
     recolectar_topologia,
     recalcular_baselines,
     refrescar_trafico_mpls,
@@ -131,6 +132,17 @@ def registrar_tareas_internas(scheduler: BackgroundScheduler, db: Database, sett
             replace_existing=True,
         )
         log.info("Calidad WAN activa (cada %ss).", settings.wan_calidad_check_seg)
+
+    # Traceroute por salto: ruta de red de los recursos opt-in (parametros.traceroute).
+    if settings.traceroute_enabled:
+        scheduler.add_job(
+            recolectar_rutas,
+            trigger=IntervalTrigger(seconds=settings.traceroute_check_seg),
+            args=[db, settings],
+            id="traceroute",
+            replace_existing=True,
+        )
+        log.info("Traceroute activo (cada %ss).", settings.traceroute_check_seg)
 
     # Virtualización (#9): inventario por-VM de hosts vCenter opt-in.
     if settings.virtualizacion_enabled:
@@ -265,7 +277,8 @@ def registrar_tareas_internas(scheduler: BackgroundScheduler, db: Database, sett
                           id="baselines", replace_existing=True)
 
     # Purga según retención (03:30).
-    scheduler.add_job(repo.purgar_datos, CronTrigger(hour=3, minute=30), args=[db],
+    scheduler.add_job(repo.purgar_datos, CronTrigger(hour=3, minute=30),
+                      args=[db, settings.interfaces_hist_retencion_dias],
                       id="purga", replace_existing=True)
     # Respaldo de configuración de firewalls (02:00). Guarda solo si cambió.
     scheduler.add_job(respaldar_configuraciones, CronTrigger(hour=2, minute=0), args=[db, settings],

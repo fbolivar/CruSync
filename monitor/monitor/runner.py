@@ -617,6 +617,42 @@ def medir_calidad_wan(db: Database, settings: Settings) -> None:
                  recurso.id, recurso.nombre, datos["mos"], datos["calidad"])
 
 
+def recolectar_rutas(db: Database, settings: Settings) -> None:
+    """Traza la ruta de red (traceroute por salto) de los recursos opt-in
+    (parametros.traceroute) y guarda la última ruta. Localiza en qué tramo del
+    camino se introduce latencia/pérdida (Starlink -> ISP -> destino)."""
+    if not settings.traceroute_enabled:
+        return
+    from . import traceroute as tr
+
+    filtro = settings.sitios_filtro()
+    recursos = repo.recursos_traceroute(db)
+    if filtro:
+        recursos = [r for r in recursos if r.sitio_id in filtro]
+
+    ahora = datetime.now(timezone.utc)
+    for recurso in recursos:
+        cfg = recurso.parametros.get("traceroute") if recurso.parametros else None
+        cfg = cfg if isinstance(cfg, dict) else {}
+        host = str(cfg.get("target") or (recurso.hostname or "").split(":", 1)[0]).strip()
+        if not host:
+            continue
+        if repo.en_mantenimiento(db, recurso, ahora):
+            continue
+        try:
+            saltos = tr.trazar(
+                host,
+                max_hops=int(cfg.get("max_hops", settings.traceroute_max_hops)),
+                timeout_seg=settings.traceroute_timeout_seg,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.warning("Traceroute %s (%s): %s", recurso.id, recurso.nombre, e)
+            continue
+        if saltos:
+            repo.guardar_ruta(db, recurso.id, saltos, ahora)
+            log.info("Ruta %s (%s): %d saltos.", recurso.id, recurso.nombre, len(saltos))
+
+
 def procesar_hardware(db: Database, settings: Settings) -> None:
     """Sondea el hardware físico (Redfish/IPMI) de los recursos opt-in y persiste
     el snapshot de componentes + inventario. Avisa cuando un componente se degrada."""

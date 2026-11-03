@@ -103,6 +103,24 @@ export interface Interfaz {
   ts: string;
 }
 
+export interface PercentilBanda {
+  muestras: number;
+  p95_in: number | null;
+  p95_out: number | null;
+  p95: number | null;
+  max_in: number | null;
+  max_out: number | null;
+}
+
+export interface SaltoRuta {
+  hop_no: number;
+  ip: string | null;
+  hostname: string | null;
+  rtt_ms: number | null;
+  perdida: boolean;
+  ts: string;
+}
+
 export interface MuestraInterfaz {
   ts: string;
   in_mbps: number | null;

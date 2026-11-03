@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Baseline, FlujoOverview, FlujosResp, HardwareResp, Interfaz, MuestraInterfaz, Paginated, Recurso, Respaldo, RespaldoDetalle, Sitio, TipoRecurso, TopologiaResp, VecinoLldp, WanCalidadResp } from './models';
+import { Baseline, FlujoOverview, FlujosResp, HardwareResp, Interfaz, MuestraInterfaz, Paginated, PercentilBanda, Recurso, Respaldo, RespaldoDetalle, SaltoRuta, Sitio, TipoRecurso, TopologiaResp, VecinoLldp, WanCalidadResp } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class RecursosService {
@@ -37,6 +37,14 @@ export class RecursosService {
   }
   interfazHistorico(id: number, ifIndex: number, rango: '1h' | '24h' | '7d'): Observable<MuestraInterfaz[]> {
     return this.api.get<MuestraInterfaz[]>(`/recursos/${id}/interfaces/${ifIndex}/historico`, { rango });
+  }
+  /** Percentil 95 de ancho de banda de una interfaz (facturación ISP). */
+  interfazPercentil(id: number, ifIndex: number, rango: '24h' | '7d' | '30d'): Observable<PercentilBanda> {
+    return this.api.get<PercentilBanda>(`/recursos/${id}/interfaces/${ifIndex}/percentil`, { rango });
+  }
+  /** Última ruta de red (traceroute por salto) del recurso. */
+  ruta(id: number): Observable<SaltoRuta[]> {
+    return this.api.get<SaltoRuta[]>(`/recursos/${id}/ruta`);
   }
 
   baselines(id: number): Observable<Baseline[]> {
