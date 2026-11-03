@@ -47,6 +47,18 @@ class Settings:
     # eventos de enlace en tiempo real los cubren los traps. 0 = en cada chequeo.
     interfaces_intervalo_seg: int = _int("INTERFACES_INTERVALO_SEG", 300)
 
+    # Alertas por ANCHO DE BANDA / saturación de interfaz (sensor estilo PRTG/
+    # SolarWinds). Sobre las interfaces monitoreadas (monitorear=true) se evalúa la
+    # utilización (% de ifHighSpeed) y los errores por intervalo. 0 = umbral
+    # desactivado. Se abre incidencia solo tras IF_SAT_ATTEMPTS ciclos seguidos por
+    # encima (anti-flapping), y se cierra al volver por debajo. Override por
+    # interfaz vía interfaces.umbral_util_warning/critical (NULL = usa estos).
+    if_util_warning: float = float(os.getenv("IF_UTIL_WARNING", "80"))   # % util warning
+    if_util_critical: float = float(os.getenv("IF_UTIL_CRITICAL", "95"))  # % util crítico
+    if_err_warning: int = _int("IF_ERR_WARNING", 0)    # errores/intervalo warning (0=off)
+    if_err_critical: int = _int("IF_ERR_CRITICAL", 0)  # errores/intervalo crítico (0=off)
+    if_sat_attempts: int = _int("IF_SAT_ATTEMPTS", 3)  # ciclos seguidos antes de abrir
+
     # Scheduler. Chequeos I/O-bound -> conviene un pool amplio para que las sondas
     # SNMP lentas no starven a las web (120s) y estas no se descarten por misfire.
     scheduler_max_workers: int = _int("SCHEDULER_MAX_WORKERS", 50)

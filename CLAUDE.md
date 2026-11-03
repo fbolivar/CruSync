@@ -462,6 +462,28 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
   pywebpush, VAPID, servicio `simon-netflow`). NOTA: agente/vCenter/GLPI quedan "listos" pero sin
   credenciales reales; su E/S de red no se validó contra esos servicios.
 
+- ✅ ALERTAS DE ANCHO DE BANDA / SATURACIÓN DE INTERFAZ (2026-11-03) [migr. 0040] — worker verificado
+  (235 tests) + `ng build` OK. Cierra el gap competitivo vs PRTG/SolarWinds: SIMON ya recolectaba
+  util%/Mbps/errores por interfaz (IF-MIB HC64) pero solo ALERTABA por link up/down. Ahora, sobre las
+  interfaces monitoreadas (`monitorear=true`), evalúa **utilización** (% de ifHighSpeed, el peor de
+  entrada/salida) y **errores**/intervalo contra umbral y abre/escala/cierra una incidencia de
+  **saturación**.
+  - **Worker**: lógica pura `monitor/interfaces_umbral.py` (`evaluar_banda`, trivaluada: métrica
+    ausente no dispara; umbral 0 = off). `runner._gestionar_incidencias_banda` con anti-flapping
+    (`IF_SAT_ATTEMPTS` ciclos seguidos, def 3) y caché `_banda_intentos`. La incidencia reutiliza el
+    modelo por interfaz (`if_index`) distinguiéndose de link-down por `componente='saturacion'`
+    (índice único ya ampliado por la ola de hardware; `incidencia_interfaz_abierta`/`abrir_incidencia_interfaz`
+    ahora reciben `componente`). Notifica apertura/escalada/cierre por el motor de incidencias.
+  - **Config**: `IF_UTIL_WARNING` (def 80), `IF_UTIL_CRITICAL` (def 95), `IF_ERR_WARNING`/`IF_ERR_CRITICAL`
+    (def 0=off), `IF_SAT_ATTEMPTS` (def 3). Override por interfaz: `interfaces.umbral_util_warning/critical`
+    (NULL = usa el global).
+  - **API**: `PUT /recursos/{id}/interfaces/{ifIndex}` ahora acepta (opcional) `umbral_util_warning/critical`
+    además de `monitorear` (valida 0-100 y crítico≥warning). Auditado por el alcance.
+  - **UI**: en la sección "Interfaces de red" del detalle, la columna Util. se colorea warn/crít según
+    el umbral efectivo del puerto, y hay una columna "Umbral util. %" editable (warn/crít por interfaz,
+    gated por rol). Pendiente de verificar EN VIVO en el servidor (migración + pull + restart worker +
+    rebuild frontend). Opcionales futuros: percentil 95 de banda (facturación ISP) y traceroute por salto.
+
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.
 

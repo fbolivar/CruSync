@@ -29,6 +29,12 @@ export class RecursosService {
   interfazMonitorear(id: number, ifIndex: number, monitorear: boolean): Observable<unknown> {
     return this.api.put(`/recursos/${id}/interfaces/${ifIndex}`, { monitorear });
   }
+  /** Fija el umbral de utilización (%) propio de la interfaz; null = usa el global. */
+  interfazUmbral(id: number, ifIndex: number, warning: number | null, critical: number | null): Observable<unknown> {
+    return this.api.put(`/recursos/${id}/interfaces/${ifIndex}`, {
+      umbral_util_warning: warning, umbral_util_critical: critical,
+    });
+  }
   interfazHistorico(id: number, ifIndex: number, rango: '1h' | '24h' | '7d'): Observable<MuestraInterfaz[]> {
     return this.api.get<MuestraInterfaz[]>(`/recursos/${id}/interfaces/${ifIndex}/historico`, { rango });
   }

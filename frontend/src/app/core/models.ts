@@ -98,6 +98,8 @@ export interface Interfaz {
   in_err?: number | null;
   out_err?: number | null;
   monitorear?: boolean;
+  umbral_util_warning?: number | null;   // override de util % (warning); null = global
+  umbral_util_critical?: number | null;  // override de util % (crítico); null = global
   ts: string;
 }
 

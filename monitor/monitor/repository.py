@@ -344,40 +344,50 @@ def nombre_interfaz(db: Database, recurso_id: int, if_index: int) -> str | None:
 
 
 def interfaces_monitoreadas(db: Database, recurso_id: int) -> list[dict[str, Any]]:
-    """Interfaces marcadas para alertar (monitorear=true) con su estado oper actual."""
+    """Interfaces marcadas para alertar (monitorear=true) con su estado oper actual,
+    su utilización/errores del último snapshot y el override de umbral por interfaz."""
     with db.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT if_index, if_name, oper_estado FROM interfaces "
-            "WHERE recurso_id = %s AND monitorear = true",
+            "SELECT if_index, if_name, oper_estado, util_in, util_out, in_err, out_err, "
+            "       umbral_util_warning, umbral_util_critical "
+            "FROM interfaces WHERE recurso_id = %s AND monitorear = true",
             (recurso_id,),
         )
         return cur.fetchall()
 
 
-def incidencia_interfaz_abierta(db: Database, recurso_id: int, if_index: int) -> dict[str, Any] | None:
+def incidencia_interfaz_abierta(db: Database, recurso_id: int, if_index: int,
+                                componente: str | None = None) -> dict[str, Any] | None:
+    """Incidencia de interfaz NO resuelta. `componente` distingue link-down (NULL)
+    de saturación de banda ('saturacion') en el mismo puerto; se compara con
+    IS NOT DISTINCT FROM para que NULL case con NULL."""
     with db.connection() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id, severidad FROM incidencias "
-            "WHERE recurso_id = %s AND if_index = %s AND estado <> 'resuelta' LIMIT 1",
-            (recurso_id, if_index),
+            "WHERE recurso_id = %s AND if_index = %s "
+            "AND componente IS NOT DISTINCT FROM %s AND estado <> 'resuelta' LIMIT 1",
+            (recurso_id, if_index, componente),
         )
         return cur.fetchone()
 
 
 def abrir_incidencia_interfaz(db: Database, recurso_id: int, if_index: int, if_nombre: str,
                               severidad: str, titulo: str, descripcion: str | None,
-                              ahora: datetime) -> int | None:
-    """Abre una incidencia de interfaz. El índice único (recurso, if_index) evita duplicados."""
+                              ahora: datetime, componente: str | None = None) -> int | None:
+    """Abre una incidencia de interfaz. El índice único
+    (recurso, COALESCE(if_index,-1), COALESCE(componente,'')) evita duplicados y
+    permite coexistir link-down (componente NULL) y saturación ('saturacion')."""
     with db.connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO incidencias
-                (recurso_id, if_index, if_nombre, estado, severidad, titulo, descripcion, abierta_at)
-            VALUES (%s, %s, %s, 'abierta', %s, %s, %s, %s)
+                (recurso_id, if_index, if_nombre, componente, estado, severidad,
+                 titulo, descripcion, abierta_at)
+            VALUES (%s, %s, %s, %s, 'abierta', %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
-            (recurso_id, if_index, if_nombre, severidad, titulo, descripcion, ahora),
+            (recurso_id, if_index, if_nombre, componente, severidad, titulo, descripcion, ahora),
         )
         row = cur.fetchone()
         return row["id"] if row else None

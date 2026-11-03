@@ -19,6 +19,7 @@ from . import repository as repo
 from .config import Settings
 from .db import Database
 from .evaluacion import Evaluacion, confirmar_estado, evaluar
+from .interfaces_umbral import evaluar_banda
 from .models import Recurso, Umbral
 from .notificaciones import SEV_ORDEN, notificar, notificar_simple
 from .probes import seleccionar_probe
@@ -120,6 +121,8 @@ def chequear(db: Database, settings: Settings, recurso: Recurso) -> str:
         # ancestro está caído (la causa raíz ya alerta).
         if resultado.interfaces and not dep_caida:
             _gestionar_incidencias_interfaces(db, settings, recurso, ahora)
+            # Saturación / errores de ancho de banda (sensor estilo PRTG/SolarWinds).
+            _gestionar_incidencias_banda(db, settings, recurso, ahora)
 
     return estado_persistido
 
@@ -787,6 +790,70 @@ def _gestionar_incidencias_interfaces(db: Database, settings: Settings, recurso:
                 notificar(db, settings, incidencia_id=ab["id"], recurso=recurso,
                           severidad=ab.get("severidad", "warning"), evento="cierre",
                           titulo=f"{recurso.nombre}: puerto {nombre} recuperado")
+
+
+# Ciclos consecutivos saturados por (recurso_id, if_index), para el anti-flapping
+# de las incidencias de banda (no abrir por un pico aislado). Persiste entre ciclos
+# dentro del mismo proceso del worker.
+_banda_intentos: dict[tuple[int, int], int] = {}
+
+# Marcador de componente que distingue una incidencia de SATURACIÓN de banda de la
+# de link-down (componente NULL) en el mismo puerto.
+_COMP_SATURACION = "saturacion"
+
+
+def _gestionar_incidencias_banda(db: Database, settings: Settings, recurso: Recurso,
+                                 ahora: datetime) -> None:
+    """Abre/escala/cierra incidencias de SATURACIÓN de ancho de banda y errores por
+    interfaz monitoreada (util% y errores/intervalo contra umbral, estilo PRTG).
+
+    Umbral efectivo = override por interfaz (interfaces.umbral_util_*) si existe,
+    si no el global del worker (IF_UTIL_*). Anti-flapping: se exige IF_SAT_ATTEMPTS
+    ciclos seguidos por encima antes de abrir; se cierra en cuanto baja."""
+    for itf in repo.interfaces_monitoreadas(db, recurso.id):
+        idx, nombre = itf["if_index"], itf["if_name"]
+        uw = itf.get("umbral_util_warning")
+        uc = itf.get("umbral_util_critical")
+        uw = settings.if_util_warning if uw is None else uw
+        uc = settings.if_util_critical if uc is None else uc
+        sev, motivo = evaluar_banda(
+            itf.get("util_in"), itf.get("util_out"),
+            itf.get("in_err"), itf.get("out_err"),
+            uw, uc, settings.if_err_warning, settings.if_err_critical,
+        )
+        key = (recurso.id, idx)
+        ab = repo.incidencia_interfaz_abierta(db, recurso.id, idx, _COMP_SATURACION)
+
+        if sev:
+            _banda_intentos[key] = _banda_intentos.get(key, 0) + 1
+            if ab:
+                # Ya abierta: escalar/desescalar si cambió la severidad.
+                if ab.get("severidad") != sev:
+                    repo.actualizar_severidad_incidencia(db, ab["id"], sev)
+                    notificar(db, settings, incidencia_id=ab["id"], recurso=recurso,
+                              severidad=sev, evento="escalada",
+                              titulo=f"{recurso.nombre}: puerto {nombre} — {motivo}")
+                continue
+            if _banda_intentos[key] < settings.if_sat_attempts:
+                continue  # aún en SOFT: no abrir por un pico puntual
+            titulo = f"{recurso.nombre}: puerto {nombre} saturado"
+            nueva = repo.abrir_incidencia_interfaz(
+                db, recurso.id, idx, nombre, sev, titulo,
+                f"Interfaz monitoreada {nombre}: {motivo}.", ahora,
+                componente=_COMP_SATURACION)
+            if nueva:
+                log.warning("Incidencia banda %s ABIERTA (recurso %s, puerto %s, %s)",
+                            nueva, recurso.id, nombre, sev)
+                notificar(db, settings, incidencia_id=nueva, recurso=recurso,
+                          severidad=sev, evento="apertura", titulo=titulo)
+        else:
+            _banda_intentos.pop(key, None)
+            if ab:
+                repo.cerrar_incidencia(db, ab["id"], ahora)
+                log.info("Incidencia banda %s resuelta (puerto %s normalizado).", ab["id"], nombre)
+                notificar(db, settings, incidencia_id=ab["id"], recurso=recurso,
+                          severidad=ab.get("severidad", "warning"), evento="cierre",
+                          titulo=f"{recurso.nombre}: puerto {nombre} normalizado")
 
 
 def _gestionar_incidencia(db: Database, settings: Settings, recurso: Recurso, ev: Evaluacion,

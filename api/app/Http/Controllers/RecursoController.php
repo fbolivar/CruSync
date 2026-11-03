@@ -64,22 +64,42 @@ class RecursoController extends Controller
         return response()->json($rows);
     }
 
-    /** Marca/desmarca una interfaz para alertar si cae (admin/operador). */
+    /**
+     * Configura una interfaz (admin/operador): marca para alertar y/o fija el
+     * umbral de utilización (% de ancho de banda) propio de esa interfaz.
+     * Todos los campos son opcionales; un umbral en null = usar el umbral global
+     * del worker (IF_UTIL_WARNING / IF_UTIL_CRITICAL).
+     */
     public function actualizarInterfaz(Request $request, int $id, int $ifIndex): JsonResponse
     {
         $this->exigirAlcance($id);
-        $data = $request->validate(['monitorear' => ['required', 'boolean']]);
+        $data = $request->validate([
+            'monitorear'           => ['sometimes', 'boolean'],
+            'umbral_util_warning'  => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            'umbral_util_critical' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
         Recurso::findOrFail($id);
+
+        if (empty($data)) {
+            return response()->json(['message' => 'Nada que actualizar.'], 422);
+        }
+        // Coherencia: si vienen ambos umbrales, el crítico no puede ser menor al warning.
+        $w = $data['umbral_util_warning'] ?? null;
+        $c = $data['umbral_util_critical'] ?? null;
+        if ($w !== null && $c !== null && $c < $w) {
+            return response()->json(
+                ['message' => 'El umbral crítico no puede ser menor que el de warning.'], 422);
+        }
 
         $afectadas = DB::table('interfaces')
             ->where('recurso_id', $id)->where('if_index', $ifIndex)
-            ->update(['monitorear' => $data['monitorear']]);
+            ->update($data);
 
         if ($afectadas === 0) {
             return response()->json(['message' => 'Interfaz no encontrada.'], 404);
         }
 
-        return response()->json(['monitorear' => $data['monitorear']]);
+        return response()->json($data);
     }
 
     /** Versiones de configuración respaldadas del recurso (sin contenido). */

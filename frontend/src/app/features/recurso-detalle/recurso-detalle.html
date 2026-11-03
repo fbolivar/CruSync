@@ -144,6 +144,7 @@
             <th class="num">↓ Mbps</th><th class="num">↑ Mbps</th>
             <th class="num">Util.</th><th class="num">Vel.</th>
             <th class="num">Err ↓/↑</th>
+            <th class="cen">Umbral util. %<br /><span class="ver-g">warn / crít</span></th>
             <th class="cen">Monitorear</th>
           </tr>
         </thead>
@@ -154,10 +155,25 @@
               <td><app-estado-badge [estado]="$any(x.oper_estado)" /></td>
               <td class="num">{{ x.in_mbps != null ? x.in_mbps : '—' }}</td>
               <td class="num">{{ x.out_mbps != null ? x.out_mbps : '—' }}</td>
-              <td class="num">{{ x.util_in != null ? (max(x.util_in, x.util_out) + '%') : '—' }}</td>
+              <td class="num" [class.util-warn]="utilNivel(x) === 'warn'"
+                  [class.util-crit]="utilNivel(x) === 'crit'">
+                {{ x.util_in != null ? (max(x.util_in, x.util_out) + '%') : '—' }}
+              </td>
               <td class="num text-dim">{{ x.speed_mbps ? (x.speed_mbps + 'M') : '—' }}</td>
               <td class="num" [class.err]="(x.in_err || 0) + (x.out_err || 0) > 0">
                 {{ (x.in_err ?? 0) }}/{{ (x.out_err ?? 0) }}
+              </td>
+              <td class="cen" (click)="$event.stopPropagation()">
+                @if (auth.puedeEditar() && x.monitorear) {
+                  <input #uw type="number" min="0" max="100" class="umbral-in"
+                         [value]="x.umbral_util_warning ?? ''" placeholder="{{ UTIL_WARN_DEF }}" />
+                  /
+                  <input #uc type="number" min="0" max="100" class="umbral-in"
+                         [value]="x.umbral_util_critical ?? ''" placeholder="{{ UTIL_CRIT_DEF }}" />
+                  <button class="btn btn-sm" (click)="guardarUmbralInterfaz(x, uw.value, uc.value)">✓</button>
+                } @else {
+                  <span class="ver-g">{{ x.umbral_util_warning ?? UTIL_WARN_DEF }}/{{ x.umbral_util_critical ?? UTIL_CRIT_DEF }}</span>
+                }
               </td>
               <td class="cen" (click)="$event.stopPropagation()">
                 @if (auth.puedeEditar()) {
@@ -169,7 +185,7 @@
             </tr>
             @if (ifExpandida() === x.if_index) {
               <tr class="if-grafica">
-                <td colspan="8">
+                <td colspan="9">
                   <div class="rango">
                     @for (rg of ['1h', '24h', '7d']; track rg) {
                       <button class="btn" [class.btn-primary]="ifRango() === rg"

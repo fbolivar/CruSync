@@ -227,6 +227,40 @@ export class RecursoDetalle {
     });
   }
 
+  // Umbral de utilización por interfaz (sensor de ancho de banda). Vacío = usa el
+  // umbral global del worker; estos valores por defecto son solo para pintar el
+  // estado en la tabla (la alerta real la decide el worker).
+  readonly UTIL_WARN_DEF = 80;
+  readonly UTIL_CRIT_DEF = 95;
+
+  /** '' sana · 'warn' · 'crit', según la util vs el umbral efectivo del puerto. */
+  utilNivel(x: Interfaz): '' | 'warn' | 'crit' {
+    const u = Math.max(x.util_in ?? 0, x.util_out ?? 0);
+    const crit = x.umbral_util_critical ?? this.UTIL_CRIT_DEF;
+    const warn = x.umbral_util_warning ?? this.UTIL_WARN_DEF;
+    if (crit > 0 && u >= crit) return 'crit';
+    if (warn > 0 && u >= warn) return 'warn';
+    return '';
+  }
+
+  guardarUmbralInterfaz(x: Interfaz, w: string, c: string): void {
+    const warning = w.trim() === '' ? null : Number(w);
+    const critical = c.trim() === '' ? null : Number(c);
+    if ((warning !== null && (warning < 0 || warning > 100)) ||
+        (critical !== null && (critical < 0 || critical > 100))) {
+      alert('El umbral debe estar entre 0 y 100.'); return;
+    }
+    if (warning !== null && critical !== null && critical < warning) {
+      alert('El umbral crítico no puede ser menor que el de warning.'); return;
+    }
+    this.recursosSvc.interfazUmbral(this.id, x.if_index, warning, critical).subscribe({
+      next: () => this.interfaces.update((xs) => xs.map((i) =>
+        i.if_index === x.if_index
+          ? { ...i, umbral_util_warning: warning, umbral_util_critical: critical } : i)),
+      error: () => alert('No se pudo guardar el umbral del puerto.'),
+    });
+  }
+
   private cargarMetricas(): void {
     this.cargando.set(true);
     const ms = { '1h': 3600, '24h': 86400, '7d': 604800 }[this.rango()];

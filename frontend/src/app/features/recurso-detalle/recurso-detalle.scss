@@ -33,6 +33,12 @@ section { margin-top: 8px; }
 .ifaces .cen { text-align: center; }
 .ifaces tr.if-down td { opacity: .55; }
 .ifaces td.err { color: var(--sev-warning); font-weight: 700; }
+.ifaces td.util-warn { color: var(--sev-warning); font-weight: 700; }
+.ifaces td.util-crit { color: var(--sev-critical, #c0392b); font-weight: 700;
+  background: color-mix(in srgb, var(--sev-critical, #c0392b) 12%, transparent); }
+.ifaces .umbral-in { width: 42px; font-size: 11px; padding: 1px 3px;
+  text-align: right; border: 1px solid var(--border, #ccc); border-radius: 3px; }
+.ifaces .btn-sm { padding: 1px 6px; font-size: 11px; margin-left: 2px; }
 .ifaces tr.if-fila { cursor: pointer; }
 .ifaces tr.if-fila:hover td { background: var(--bg-2, #f5f7f5); }
 .ifaces .ver-g { color: var(--text-dim); font-size: 10px; }
