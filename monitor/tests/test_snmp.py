@@ -6,6 +6,7 @@ from monitor.probes.snmp import (
     construir_muestras_ups,
     estado_sin_snmp,
     indice_memoria_fisica,
+    memoria_real_ucd,
     porcentaje_memoria,
     promedio_cpu,
 )
@@ -107,6 +108,19 @@ def test_porcentaje_memoria():
     assert porcentaje_memoria(1309992, 862898) == 65.9
     assert porcentaje_memoria(0, 5) is None
     assert porcentaje_memoria(None, 5) is None
+
+
+def test_memoria_real_ucd():
+    # Valores reales medidos en BC360 (KB): hrStorage reportaría ~94%, pero
+    # descontando buffers+caché la memoria realmente usada es ~18%.
+    assert memoria_real_ucd(16308152, 909900, 811956, 11634244) == 18.1
+    # Windows no expone estos OIDs → sin total válido, None (cae a hrStorage).
+    assert memoria_real_ucd(None, None, None, None) is None
+    assert memoria_real_ucd(0, 0, 0, 0) is None
+    # buffers/caché ausentes: se tratan como 0 (no rompe el cálculo).
+    assert memoria_real_ucd(1000, 250, None, None) == 75.0
+    # Nunca negativo aunque la suma exceda el total (lecturas inconsistentes).
+    assert memoria_real_ucd(1000, 600, 300, 300) == 0.0
 
 
 # ── Respaldo ICMP cuando SNMP no responde ─────────────────────────────

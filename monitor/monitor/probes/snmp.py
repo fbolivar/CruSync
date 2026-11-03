@@ -56,6 +56,14 @@ HR_STOR_SIZE = "1.3.6.1.2.1.25.2.3.1.5"   # hrStorageSize (en unidades de asigna
 HR_STOR_USED = "1.3.6.1.2.1.25.2.3.1.6"   # hrStorageUsed
 HR_TYPE_FIXED = "1.3.6.1.2.1.25.2.1.4"    # hrStorageFixedDisk (discos locales)
 
+# UCD-SNMP-MIB memoria (net-snmp, solo Linux/*nix): permite descontar buffers y
+# caché, que en hrStorage de Linux se contabilizan (erróneamente) como "usado".
+# En Windows estos OIDs NO existen → se cae al cálculo por hrStorage.
+UCD_MEM_TOTAL = "1.3.6.1.4.1.2021.4.5.0"   # memTotalReal (KB)
+UCD_MEM_AVAIL = "1.3.6.1.4.1.2021.4.6.0"   # memAvailReal (KB) = free real (sin cache)
+UCD_MEM_BUFFER = "1.3.6.1.4.1.2021.4.14.0"  # memBuffer (KB)
+UCD_MEM_CACHED = "1.3.6.1.4.1.2021.4.15.0"  # memCached (KB)
+
 # UPS-MIB (RFC 1628) — nombre de métrica -> OID escalar
 UPS_OIDS: dict[str, str] = {
     "battery_status": "1.3.6.1.2.1.33.1.2.1.0",   # 1 unknown,2 normal,3 low,4 depleted
@@ -169,6 +177,28 @@ def porcentaje_memoria(size: object, used: object) -> float | None:
     if s is None or u is None or s <= 0:
         return None
     return round(u / s * 100, 1)
+
+
+def memoria_real_ucd(
+    total: object, avail: object, buffer: object, cached: object
+) -> float | None:
+    """% de RAM realmente usada según UCD-SNMP (Linux), descontando buffers+caché.
+
+    used_real = total - avail - buffer - cached  (todo en KB). Los buffers y la
+    caché son memoria reclamable, por lo que NO deben contar como ocupada (es el
+    gotcha de hrStorage en Linux, que los suma y reporta ~94% con el host ocioso).
+    Devuelve None si no hay total válido (p.ej. Windows, que no expone estos OIDs).
+    """
+    t = a_float(total)
+    if t is None or t <= 0:
+        return None
+    av = a_float(avail) or 0.0
+    bf = a_float(buffer) or 0.0
+    ca = a_float(cached) or 0.0
+    usado = t - av - bf - ca
+    if usado < 0:
+        usado = 0.0
+    return round(usado / t * 100, 1)
 
 
 def _por_indice(walk: list[tuple[str, object]]) -> dict[str, object]:
@@ -347,20 +377,37 @@ class SnmpProbe:
                     muestras.append(Muestra("cpu", cpu, "%"))
                     detalle["nucleos"] = len(proc)
 
-                # Memoria: % usado de la "Physical Memory"
+                # Memoria: en Linux (net-snmp) usar UCD-SNMP descontando buffers+caché;
+                # si no existe (Windows), caer al % de "Physical Memory" de hrStorage.
                 descr, err_mem = snmp_walk(host, port, cred, HR_STOR_DESCR, timeout, retries)
                 if err_mem:
                     detalle["error_mem"] = err_mem
-                idx = indice_memoria_fisica(descr)
-                if idx:
-                    _okm, valm, _ = snmp_get(
-                        host, port, cred,
-                        {"size": f"{HR_STOR_SIZE}.{idx}", "used": f"{HR_STOR_USED}.{idx}"},
-                        timeout, retries,
-                    )
-                    mem = porcentaje_memoria(valm.get("size"), valm.get("used"))
-                    if mem is not None:
-                        muestras.append(Muestra("mem", mem, "%"))
+                _oku, valu, _ = snmp_get(
+                    host, port, cred,
+                    {"total": UCD_MEM_TOTAL, "avail": UCD_MEM_AVAIL,
+                     "buffer": UCD_MEM_BUFFER, "cached": UCD_MEM_CACHED},
+                    timeout, retries,
+                )
+                mem = memoria_real_ucd(
+                    valu.get("total"), valu.get("avail"),
+                    valu.get("buffer"), valu.get("cached"),
+                )
+                if mem is not None:
+                    detalle["mem_fuente"] = "ucd"
+                else:
+                    # Fallback Windows: % de la "Physical Memory" de hrStorage.
+                    idx = indice_memoria_fisica(descr)
+                    if idx:
+                        _okm, valm, _ = snmp_get(
+                            host, port, cred,
+                            {"size": f"{HR_STOR_SIZE}.{idx}", "used": f"{HR_STOR_USED}.{idx}"},
+                            timeout, retries,
+                        )
+                        mem = porcentaje_memoria(valm.get("size"), valm.get("used"))
+                        if mem is not None:
+                            detalle["mem_fuente"] = "hrstorage"
+                if mem is not None:
+                    muestras.append(Muestra("mem", mem, "%"))
 
                 # Discos fijos: % usado por volumen (C:, D:, …) + disco_max.
                 tipos, _ = snmp_walk(host, port, cred, HR_STOR_TYPE, timeout, retries)
