@@ -42,6 +42,12 @@ class ImportacionController extends Controller
         $defActivo   = array_key_exists('activo', $v) ? (bool) $v['activo'] : true;
         $defSitio    = $v['sitio'] ?? null;
 
+        // validate() recorta de cada fila las claves sin regla (sitio, community,
+        // tipo, snmp_version... por fila). Se usa el input CRUDO para conservar
+        // todas las columnas del CSV; la validación de arriba ya garantizó la
+        // estructura (nombre/hostname presentes y límites del lote).
+        $filas = $request->input('filas', []);
+
         // Catálogos en memoria (una sola consulta cada uno; nada por fila).
         $tipos  = DB::table('tipos_recurso')->pluck('id', 'codigo'); // codigo => id
         $sitios = [];
@@ -56,7 +62,7 @@ class ImportacionController extends Controller
 
         $creados = 0; $actualizados = 0; $errores = [];
 
-        foreach ($v['filas'] as $i => $fila) {
+        foreach ($filas as $i => $fila) {
             $linea = $i + 1;
             try {
                 $nombre = trim((string) $fila['nombre']);
@@ -129,7 +135,7 @@ class ImportacionController extends Controller
         }
 
         return response()->json([
-            'total'        => count($v['filas']),
+            'total'        => count($filas),
             'creados'      => $creados,
             'actualizados' => $actualizados,
             'con_error'    => count($errores),
