@@ -250,6 +250,19 @@
         Si <i>desde &gt; hasta</i> la ventana cruza medianoche (guardia: 22:00 → 06:00).<br>
         Ej. equipo de servidores solo en jornada: <code>{{ EJ_RUTEO }}</code>
       </p>
+      <p class="text-dim hint">
+        <b>Qué poner por medio</b> (config = no sensible · secretos = cifrado):<br>
+        📧 <b>email</b> — config: <code>{{ '{"smtp_host":"smtp.gmail.com","smtp_port":587,"from":"noc@entidad.gov.co","destinatarios":["a@x.co"]}' }}</code>
+        · secretos: <code>{{ '{"smtp_user":"...","smtp_pass":"..."}' }}</code><br>
+        💬 <b>telegram</b> — config: <code>{{ '{"chat_id":"-1001234567890"}' }}</code>
+        · secretos: <code>{{ '{"bot_token":"123:ABC..."}' }}</code>
+        <span class="ver-g">(crea el bot con &#64;BotFather; el chat_id del grupo con &#64;getidsbot)</span><br>
+        🟢 <b>whatsapp</b> (Meta Cloud API) — config: <code>{{ '{"proveedor":"meta","phone_number_id":"...","destinatarios":["573001234567"],"template_name":"alerta_simon","template_lang":"es"}' }}</code>
+        · secretos: <code>{{ '{"access_token":"EAAG..."}' }}</code><br>
+        <span class="ver-g">WhatsApp exige plantilla aprobada fuera de la ventana de 24 h. Alternativa Twilio: config
+        <code>{{ '{"proveedor":"twilio","account_sid":"AC...","from":"whatsapp:+14155238886","destinatarios":["+57300..."]}' }}</code>,
+        secretos <code>{{ '{"auth_token":"..."}' }}</code>.</span>
+      </p>
       <label>Secretos (JSON, cifrado — nunca se muestra)
         <textarea name="secretos" rows="2" [(ngModel)]="fCanal.secretosTexto"
                   placeholder='{ "token": "..." }  (vacío = sin cambios)'></textarea>

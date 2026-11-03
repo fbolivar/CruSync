@@ -5,6 +5,15 @@ Config (no sensible) y secretos (descifrados) viven en el objeto Canal:
 - telegram: config{chat_id}                                      secretos{bot_token}
 - webhook:  config{url}                                          secretos{token}
 - teams:    config{webhook_url} (o secretos{webhook_url})        — Incoming Webhook de Teams
+- whatsapp: proveedor 'meta' (WhatsApp Cloud API) o 'twilio':
+    * meta:   config{proveedor:'meta', phone_number_id, destinatarios[],
+                     template_name?, template_lang?='es', api_version?='v22.0'}
+              secretos{access_token}
+    * twilio: config{proveedor:'twilio', account_sid, from:'whatsapp:+14155238886',
+                     destinatarios[]}            secretos{auth_token}
+  NOTA WhatsApp: fuera de la ventana de 24 h, Meta exige un MENSAJE DE PLANTILLA
+  aprobado (template_name). Si no se define template_name, se envía texto plano
+  (solo válido dentro de una sesión / sandbox).
 """
 from __future__ import annotations
 
@@ -76,6 +85,8 @@ def enviar(canal: Canal, msg: dict) -> tuple[bool, str | None, str | None]:
         return _webhook(canal, msg)
     if canal.tipo == "teams":
         return _teams(canal, msg)
+    if canal.tipo == "whatsapp":
+        return _whatsapp(canal, msg)
     if canal.tipo == "glpi":
         return _glpi(canal, msg)
     return False, f"tipo de canal no soportado: {canal.tipo}", None
@@ -195,6 +206,76 @@ def _telegram(canal: Canal, msg: dict):
         return True, None, str(chat)
     except Exception as e:  # noqa: BLE001
         return False, str(e), str(chat)
+
+
+def payload_whatsapp_meta(to: str, texto: str, template_name: str | None,
+                          lang: str = "es") -> dict:
+    """Arma el cuerpo JSON para WhatsApp Cloud API (función pura, testeable). Con
+    `template_name` usa un mensaje de plantilla (obligatorio fuera de la ventana de
+    24 h) con el texto como parámetro {{1}} del body; sin él, texto plano."""
+    if template_name:
+        return {
+            "messaging_product": "whatsapp", "to": str(to), "type": "template",
+            "template": {"name": template_name, "language": {"code": lang},
+                         "components": [{"type": "body",
+                                         "parameters": [{"type": "text", "text": texto}]}]},
+        }
+    return {"messaging_product": "whatsapp", "to": str(to),
+            "type": "text", "text": {"body": texto}}
+
+
+def _whatsapp(canal: Canal, msg: dict):
+    """WhatsApp por Meta Cloud API (por defecto) o Twilio. Envía a cada número de
+    `config.destinatarios` (E.164, p.ej. '573001234567'). Devuelve ok si TODOS los
+    envíos salieron bien; si alguno falla, (False, errores, destino)."""
+    import httpx
+
+    cfg = canal.config or {}
+    sec = canal.secretos or {}
+    destinatarios = cfg.get("destinatarios") or []
+    if not destinatarios:
+        return False, "config de whatsapp incompleta (destinatarios)", None
+    texto = f"{msg['asunto']}\n{msg['texto']}"
+    proveedor = (cfg.get("proveedor") or "meta").lower()
+    destino = ", ".join(str(d) for d in destinatarios)
+    errores: list[str] = []
+
+    if proveedor == "twilio":
+        sid = cfg.get("account_sid")
+        token = sec.get("auth_token")
+        remitente = cfg.get("from")  # 'whatsapp:+14155238886'
+        if not sid or not token or not remitente:
+            return False, "config de whatsapp/twilio incompleta (account_sid/from/auth_token)", destino
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        for to in destinatarios:
+            num = str(to) if str(to).startswith("whatsapp:") else f"whatsapp:{to}"
+            try:
+                r = httpx.post(url, data={"From": remitente, "To": num, "Body": texto},
+                               auth=(sid, token), timeout=20)
+                r.raise_for_status()
+            except Exception as e:  # noqa: BLE001, PERF203
+                errores.append(f"{to}: {e}")
+    else:  # meta WhatsApp Cloud API
+        phone_id = cfg.get("phone_number_id")
+        token = sec.get("access_token")
+        if not phone_id or not token:
+            return False, "config de whatsapp/meta incompleta (phone_number_id/access_token)", destino
+        ver = cfg.get("api_version", "v22.0")
+        plantilla = cfg.get("template_name")
+        lang = cfg.get("template_lang", "es")
+        url = f"https://graph.facebook.com/{ver}/{phone_id}/messages"
+        headers = {"Authorization": f"Bearer {token}"}
+        for to in destinatarios:
+            cuerpo = payload_whatsapp_meta(to, texto, plantilla, lang)
+            try:
+                r = httpx.post(url, json=cuerpo, headers=headers, timeout=20)
+                r.raise_for_status()
+            except Exception as e:  # noqa: BLE001, PERF203
+                errores.append(f"{to}: {e}")
+
+    if errores:
+        return False, "; ".join(errores), destino
+    return True, None, destino
 
 
 def _teams(canal: Canal, msg: dict):

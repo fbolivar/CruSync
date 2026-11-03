@@ -499,6 +499,29 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
     API `GET /recursos/{id}/ruta`. UI: sección "Ruta de red" en el detalle (saltos con IP/RTT, marca '*').
     NOTA: requiere `traceroute` o `tracepath` instalado en el servidor (`apt install traceroute`).
 
+- ✅ CANALES DE ALERTA 24×7: correo + Telegram + WhatsApp (2026-11-03) [migr. 0042] — worker 245 tests +
+  `ng build` OK. Deja los tres medios cableados de punta a punta para operación 24×7; solo falta
+  ingresar credenciales y activar.
+  - **Correo (email)**: ya estaba activo en producción (canal "Correo NOC", Gmail/Workspace). Sin cambios.
+  - **Telegram**: sender ya existía (`senders._telegram`), solo faltaba el canal. config `{chat_id}` +
+    secretos `{bot_token}` (crear bot con @BotFather; chat_id del grupo con @getidsbot).
+  - **WhatsApp (NUEVO)**: `senders._whatsapp` con DOS proveedores — **Meta WhatsApp Cloud API** (por
+    defecto) y **Twilio**. Payload Meta en función pura testeable `payload_whatsapp_meta` (plantilla si
+    hay `template_name`, si no texto plano). Meta: config `{proveedor:'meta', phone_number_id,
+    destinatarios[], template_name?, template_lang?='es', api_version?='v22.0'}` + secretos
+    `{access_token}`. Twilio: config `{proveedor:'twilio', account_sid, from:'whatsapp:+…',
+    destinatarios[]}` + secretos `{auth_token}`. OJO: fuera de la ventana de 24 h Meta exige plantilla
+    aprobada.
+  - **BD** migr. 0042: el CHECK de `canales_notificacion.tipo` (solo email/sms/webhook/slack/telegram)
+    se amplió a incluir teams/whatsapp/glpi (los senders de teams/glpi ya existían pero NO se podían dar
+    de alta por el CHECK).
+  - **API**: `CanalNotificacionController` ahora valida `whatsapp` en los tipos permitidos.
+  - **UI** (Configuración → Canales): `whatsapp` en el selector de tipo + ayuda con la forma exacta de
+    config/secretos por medio (email/telegram/whatsapp). El enrutamiento por canal (min_severidad / tipos
+    / sitios / horario de guardia) ya existía y aplica a los tres.
+  - Se crearon canales placeholder INACTIVOS "Telegram NOC" y "WhatsApp NOC" listos para pegar tokens y
+    activar. El motor solo usa canales `activo=true`, así que no envían hasta configurarse.
+
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.
 

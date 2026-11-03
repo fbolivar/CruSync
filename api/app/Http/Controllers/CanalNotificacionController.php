@@ -74,7 +74,7 @@ class CanalNotificacionController extends Controller
         $req = $partial ? 'sometimes' : 'required';
 
         return [
-            'tipo'     => [$req, Rule::in(['email', 'sms', 'webhook', 'slack', 'telegram', 'teams', 'glpi'])],
+            'tipo'     => [$req, Rule::in(['email', 'sms', 'webhook', 'slack', 'telegram', 'teams', 'whatsapp', 'glpi'])],
             'nombre'   => [$req, 'string', 'max:255'],
             'config'   => ['nullable', 'array'],
             'activo'   => ['boolean'],

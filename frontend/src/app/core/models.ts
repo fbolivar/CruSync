@@ -356,7 +356,7 @@ export interface LdapConfig {
 }
 
 export const OPERADORES = ['>', '>=', '<', '<=', '==', '!='];
-export const TIPOS_CANAL = ['email', 'sms', 'webhook', 'slack', 'telegram', 'teams'];
+export const TIPOS_CANAL = ['email', 'telegram', 'whatsapp', 'teams', 'webhook', 'slack', 'sms', 'glpi'];
 export const ROLES: Rol[] = ['admin', 'operador', 'viewer'];
 export const SEVERIDADES: Severidad[] = ['info', 'warning', 'critical'];
 
