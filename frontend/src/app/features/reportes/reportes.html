@@ -196,9 +196,91 @@
     </table>
   }
 
+  <!-- ════════ CONSUMO DE ANCHO DE BANDA ════════ -->
+  <h2 class="sub">Consumo de ancho de banda</h2>
+  <div class="barra">
+    <div class="rango">
+      @for (rg of ['24h', '7d', '30d']; track rg) {
+        <button class="btn" [class.btn-primary]="bandaRango() === rg"
+                (click)="cambiarRangoBanda($any(rg))">{{ rg }}</button>
+      }
+    </div>
+    <div class="exp-acc">
+      <button class="btn" (click)="exportarBandaPdf()" [disabled]="bandaFilas().length === 0">Exportar PDF</button>
+      <button class="btn" (click)="csvBanda()" [disabled]="bandaFilas().length === 0">Descargar CSV</button>
+    </div>
+  </div>
+  @if (bandaCargando()) {
+    <p class="text-dim">Cargando…</p>
+  } @else if (bandaFilas().length === 0) {
+    <p class="text-dim">Sin datos de interfaces en el periodo (requiere interfaces con histórico de tráfico).</p>
+  } @else {
+    <table>
+      <thead><tr>
+        <th>Recurso</th><th>Interfaz</th><th>Sitio</th>
+        <th class="num">Prom. ↓</th><th class="num">Prom. ↑</th>
+        <th class="num">P95 ↓</th><th class="num">P95 ↑</th>
+        <th class="num">Máx ↓</th><th class="num">Máx ↑</th>
+      </tr></thead>
+      <tbody>
+        @for (f of bandaFilas(); track $index) {
+          <tr>
+            <td><b>{{ f.nombre }}</b></td><td>{{ f.if_name }}</td>
+            <td class="text-dim">{{ f.sitio_nombre || '—' }}</td>
+            <td class="num">{{ f.avg_in }}</td><td class="num">{{ f.avg_out }}</td>
+            <td class="num"><b>{{ f.p95_in }}</b></td><td class="num"><b>{{ f.p95_out }}</b></td>
+            <td class="num text-dim">{{ f.max_in }}</td><td class="num text-dim">{{ f.max_out }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="text-dim nota">Mbps. El P95 (percentil 95) es la métrica de facturación/capacidad: el 95% del tiempo el tráfico estuvo por debajo.</p>
+  }
+
+  <!-- ════════ ALERTAS ENVIADAS ════════ -->
+  <h2 class="sub">Alertas enviadas</h2>
+  <div class="barra">
+    <div class="rango">
+      @for (rg of ['24h', '7d', '30d']; track rg) {
+        <button class="btn" [class.btn-primary]="alertasRango() === rg"
+                (click)="cambiarRangoAlertas($any(rg))">{{ rg }}</button>
+      }
+    </div>
+    <div class="exp-acc">
+      <button class="btn" (click)="exportarAlertasPdf()" [disabled]="alertasFilas().length === 0">Exportar PDF</button>
+      <button class="btn" (click)="csvAlertas()" [disabled]="alertasFilas().length === 0">Descargar CSV</button>
+    </div>
+  </div>
+  @if (alertasCargando()) {
+    <p class="text-dim">Cargando…</p>
+  } @else if (alertasFilas().length === 0) {
+    <p class="text-dim">Sin alertas enviadas en el periodo.</p>
+  } @else {
+    <table class="alertas">
+      <thead><tr>
+        <th>Fecha y hora</th><th>Medio</th><th>Recurso</th><th>Sev.</th>
+        <th>Evento</th><th>Alerta</th><th>Estado</th>
+      </tr></thead>
+      <tbody>
+        @for (a of alertasFilas(); track $index) {
+          <tr [class.alerta-fallida]="a.estado === 'fallida'">
+            <td class="mono">{{ a.ts }}</td>
+            <td>{{ a.medio }}</td>
+            <td>{{ a.recurso }}</td>
+            <td><span class="sev sev-{{ a.severidad }}">{{ a.severidad }}</span></td>
+            <td class="text-dim">{{ a.evento }}</td>
+            <td>{{ a.asunto }}</td>
+            <td>{{ a.estado }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="text-dim nota">Registro de notificaciones emitidas (correo/Telegram/WhatsApp…). Las fallidas se resaltan.</p>
+  }
+
   <!-- ════════ PROGRAMACIÓN DE REPORTES ════════ -->
   <h2 class="sub">Programación de reportes</h2>
-  <p class="text-dim nota">Envío automático del informe de disponibilidad por correo (PDF/CSV) según la periodicidad.</p>
+  <p class="text-dim nota">Envío automático por correo (PDF/CSV) según la periodicidad. Tipos: disponibilidad, cumplimiento de SLA, consumo de ancho de banda y alertas enviadas.</p>
   @if (!auth.puedeEditar()) { <p class="text-dim">Rol {{ auth.rol() }} · solo lectura.</p> }
   @if (errorProg()) { <p class="err">{{ errorProg() }}</p> }
   @if (auth.puedeEditar()) { <button class="btn btn-primary mb" (click)="nuevoProg()">+ Nuevo reporte</button> }

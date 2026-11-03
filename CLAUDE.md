@@ -539,6 +539,12 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
   - **UI** (Reportes → Programación): selector "Tipo de informe" en el alta/edición + columna Tipo.
   - El export on-screen manual (ejecutivo/sitio/recurso/servicios) sigue igual; banda/alertas se
     consultan por sus endpoints.
+  - REDISEÑO DE LA PANTALLA REPORTES (2026-11-03): la pantalla ahora **visualiza** banda y alertas en
+    tablas con selector de rango (24h/7d/30d) y botones **Exportar PDF** (server, Dompdf corporativo) y
+    **Descargar CSV** (cliente, directo). El exportador server-side (`ReporteExportController` +
+    `ReporteData` + Blade `reportes.pdf`) se amplió con los tipos `banda` y `alertas` (estructura
+    normalizada titulo/subtitulo/kpis/tablas, respeta el alcance por usuario). Así los 4 informes se ven
+    y exportan en PDF/CSV desde la pantalla, además de programarse por correo.
 
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.

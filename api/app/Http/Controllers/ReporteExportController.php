@@ -19,7 +19,7 @@ class ReporteExportController extends Controller
     {
         $request->merge(['tipo' => $tipo]);
         $v = $request->validate([
-            'tipo'    => [Rule::in(['ejecutivo', 'sitio', 'recurso', 'servicios'])],
+            'tipo'    => [Rule::in(['ejecutivo', 'sitio', 'recurso', 'servicios', 'banda', 'alertas'])],
             'formato' => [Rule::in(['csv', 'xlsx', 'pdf'])],
             'rango'   => ['nullable', Rule::in(['24h', '7d', '30d'])],
             'id'      => ['nullable', 'integer'],

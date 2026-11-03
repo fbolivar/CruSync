@@ -386,6 +386,120 @@ class ReporteData
         ];
     }
 
+    // ── 5) Consumo de ancho de banda (por interfaz) ───────────────────
+    public static function banda(string $rango): array
+    {
+        $desde = now()->subSeconds(self::rangoSeg($rango))->toDateTimeString();
+        $cond = 'r.activo = true';
+        $bind = [$desde];
+        $alc = Alcance::sitios();
+        if ($alc !== null) {
+            $cond .= ' AND r.sitio_id = ANY(?::int[])';
+            $bind[] = '{'.implode(',', array_map('intval', $alc)).'}';
+        }
+
+        $rows = DB::select(
+            "SELECT r.nombre, COALESCE(s.nombre,'—') AS sitio, i.if_name,
+                    h.muestras, h.avg_in, h.avg_out, h.p95_in, h.p95_out, h.max_in, h.max_out
+             FROM interfaces i
+             JOIN recursos r ON r.id = i.recurso_id
+             LEFT JOIN sitios s ON s.id = r.sitio_id
+             JOIN LATERAL (
+                 SELECT count(*) AS muestras,
+                        round(avg(in_mbps)::numeric,2)  AS avg_in,
+                        round(avg(out_mbps)::numeric,2) AS avg_out,
+                        round(percentile_cont(0.95) within group (order by in_mbps)::numeric,2)  AS p95_in,
+                        round(percentile_cont(0.95) within group (order by out_mbps)::numeric,2) AS p95_out,
+                        round(max(in_mbps)::numeric,2)  AS max_in,
+                        round(max(out_mbps)::numeric,2) AS max_out
+                 FROM interfaces_historico hh
+                 WHERE hh.recurso_id = i.recurso_id AND hh.if_index = i.if_index AND hh.ts >= ?
+             ) h ON true
+             WHERE $cond AND h.muestras > 0
+             ORDER BY GREATEST(COALESCE(h.p95_in,0),COALESCE(h.p95_out,0)) DESC",
+            $bind
+        );
+
+        $p95max = 0.0;
+        $filas = array_map(function ($r) use (&$p95max) {
+            $p95max = max($p95max, (float) $r->p95_in, (float) $r->p95_out);
+            return [$r->nombre, $r->if_name, $r->sitio,
+                number_format((float) $r->avg_in, 2), number_format((float) $r->avg_out, 2),
+                number_format((float) $r->p95_in, 2), number_format((float) $r->p95_out, 2),
+                number_format((float) $r->max_in, 2), number_format((float) $r->max_out, 2)];
+        }, $rows);
+
+        return [
+            'titulo'    => 'Reporte de consumo de ancho de banda',
+            'subtitulo' => self::subtitulo($rango),
+            'kpis'      => [
+                ['label' => 'Interfaces', 'valor' => count($rows)],
+                ['label' => 'Consumo p95 máximo', 'valor' => number_format($p95max, 2).' Mbps'],
+            ],
+            'tablas'    => [[
+                'titulo'   => 'Consumo por interfaz (Mbps) — ordenado por p95',
+                'columnas' => ['Recurso', 'Interfaz', 'Sitio', 'Prom. ↓', 'Prom. ↑',
+                               'P95 ↓', 'P95 ↑', 'Máx ↓', 'Máx ↑'],
+                'filas'    => $filas,
+            ]],
+        ];
+    }
+
+    // ── 6) Alertas enviadas (notificaciones) ──────────────────────────
+    public static function alertas(string $rango): array
+    {
+        $desde = now()->subSeconds(self::rangoSeg($rango))->toDateTimeString();
+        $cond = '1 = 1';
+        $bind = [$desde];
+        $alc = Alcance::sitios();
+        if ($alc !== null) {
+            $cond .= ' AND r.sitio_id = ANY(?::int[])';
+            $bind[] = '{'.implode(',', array_map('intval', $alc)).'}';
+        }
+
+        $rows = DB::select(
+            "SELECT to_char(n.created_at,'YYYY-MM-DD HH24:MI:SS') AS ts,
+                    cn.tipo AS medio, n.destino, r.nombre AS recurso,
+                    n.payload->>'severidad' AS severidad, n.payload->>'evento' AS evento,
+                    n.payload->>'asunto' AS asunto, n.estado, n.error
+             FROM notificaciones n
+             JOIN canales_notificacion cn ON cn.id = n.canal_id
+             JOIN incidencias ic ON ic.id = n.incidencia_id
+             JOIN recursos r ON r.id = ic.recurso_id
+             WHERE n.created_at >= ? AND $cond
+             ORDER BY n.created_at DESC LIMIT 5000",
+            $bind
+        );
+
+        $enviadas = 0; $fallidas = 0; $criticas = 0;
+        foreach ($rows as $r) {
+            $enviadas += $r->estado === 'enviada' ? 1 : 0;
+            $fallidas += $r->estado === 'fallida' ? 1 : 0;
+            $criticas += $r->severidad === 'critical' ? 1 : 0;
+        }
+        $filas = array_map(fn ($r) => [
+            $r->ts, $r->medio, $r->recurso, ucfirst($r->severidad ?? '—'),
+            $r->evento ?? '—', $r->asunto ?? '—', ucfirst($r->estado),
+        ], $rows);
+
+        return [
+            'titulo'    => 'Reporte de alertas enviadas',
+            'subtitulo' => self::subtitulo($rango),
+            'kpis'      => [
+                ['label' => 'Alertas', 'valor' => count($rows)],
+                ['label' => 'Enviadas', 'valor' => $enviadas],
+                ['label' => 'Fallidas', 'valor' => $fallidas],
+                ['label' => 'Críticas', 'valor' => $criticas],
+            ],
+            'tablas'    => [[
+                'titulo'   => 'Detalle de alertas (más recientes primero)',
+                'columnas' => ['Fecha y hora', 'Medio', 'Recurso', 'Severidad',
+                               'Evento', 'Alerta', 'Estado'],
+                'filas'    => $filas,
+            ]],
+        ];
+    }
+
     /** Despacha por tipo de reporte. */
     public static function construir(string $tipo, string $rango, ?int $id): array
     {
@@ -394,6 +508,8 @@ class ReporteData
             'sitio'     => self::porSitio($rango, $id),
             'recurso'   => self::porRecurso($rango, $id),
             'servicios' => self::servicios($rango),
+            'banda'     => self::banda($rango),
+            'alertas'   => self::alertas($rango),
             default     => self::ejecutivo($rango),
         };
     }

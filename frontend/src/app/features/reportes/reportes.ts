@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FilaDisponibilidad, Pronostico, Recurso, ReporteProgramado, Sitio } from '../../core/models';
+import { FilaAlertaReporte, FilaBandaReporte, FilaDisponibilidad, Pronostico, Recurso, ReporteProgramado, Sitio } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { RecursosService } from '../../core/recursos.service';
 import { ReportesService } from '../../core/reportes.service';
@@ -69,6 +69,65 @@ export class Reportes implements OnInit {
     a.href = url;
     a.download = nombre;
     a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Vista previa: CONSUMO DE ANCHO DE BANDA ──
+  bandaRango = signal<'24h' | '7d' | '30d'>('7d');
+  bandaFilas = signal<FilaBandaReporte[]>([]);
+  bandaCargando = signal(false);
+  cargarBanda(): void {
+    this.bandaCargando.set(true);
+    this.svc.banda(this.bandaRango()).subscribe({
+      next: (r) => { this.bandaFilas.set(r.interfaces); this.bandaCargando.set(false); },
+      error: () => { this.bandaFilas.set([]); this.bandaCargando.set(false); },
+    });
+  }
+  cambiarRangoBanda(r: '24h' | '7d' | '30d'): void { this.bandaRango.set(r); this.cargarBanda(); }
+  exportarBandaPdf(): void {
+    this.svc.exportar('banda', 'pdf', { rango: this.bandaRango() })
+      .subscribe({ next: (resp) => this.guardar(resp, `reporte_banda_${this.bandaRango()}.pdf`) });
+  }
+  csvBanda(): void {
+    const cab = ['Recurso', 'Interfaz', 'Sitio', 'Prom. entrada (Mbps)', 'Prom. salida (Mbps)',
+      'P95 entrada (Mbps)', 'P95 salida (Mbps)', 'Max entrada (Mbps)', 'Max salida (Mbps)', 'Muestras'];
+    const filas = this.bandaFilas().map((f) => [f.nombre, f.if_name, f.sitio_nombre ?? '',
+      f.avg_in ?? '', f.avg_out ?? '', f.p95_in ?? '', f.p95_out ?? '', f.max_in ?? '', f.max_out ?? '', f.muestras]);
+    this.descargarCsv([cab, ...filas], `reporte_banda_${this.bandaRango()}.csv`);
+  }
+
+  // ── Vista previa: ALERTAS ENVIADAS ──
+  alertasRango = signal<'24h' | '7d' | '30d'>('7d');
+  alertasFilas = signal<FilaAlertaReporte[]>([]);
+  alertasCargando = signal(false);
+  cargarAlertas(): void {
+    this.alertasCargando.set(true);
+    this.svc.alertas(this.alertasRango()).subscribe({
+      next: (r) => { this.alertasFilas.set(r.alertas); this.alertasCargando.set(false); },
+      error: () => { this.alertasFilas.set([]); this.alertasCargando.set(false); },
+    });
+  }
+  cambiarRangoAlertas(r: '24h' | '7d' | '30d'): void { this.alertasRango.set(r); this.cargarAlertas(); }
+  exportarAlertasPdf(): void {
+    this.svc.exportar('alertas', 'pdf', { rango: this.alertasRango() })
+      .subscribe({ next: (resp) => this.guardar(resp, `reporte_alertas_${this.alertasRango()}.pdf`) });
+  }
+  csvAlertas(): void {
+    const cab = ['Fecha y hora', 'Medio', 'Canal', 'Destino', 'Recurso', 'Severidad',
+      'Evento', 'Alerta', 'Estado', 'Error'];
+    const filas = this.alertasFilas().map((a) => [a.ts, a.medio, a.canal_nombre, a.destino ?? '',
+      a.recurso, a.severidad ?? '', a.evento ?? '', a.asunto ?? '', a.estado, a.error ?? '']);
+    this.descargarCsv([cab, ...filas], `reporte_alertas_${this.alertasRango()}.csv`);
+  }
+
+  /** CSV client-side (UTF-8 con BOM) a partir de una matriz; descarga directa. */
+  private descargarCsv(matriz: (string | number)[][], nombre: string): void {
+    const cuerpo = matriz.map((fila) =>
+      fila.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + cuerpo], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombre; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -161,6 +220,8 @@ export class Reportes implements OnInit {
   ngOnInit(): void {
     this.cargar();
     this.svc.pronosticos().subscribe((p) => this.pronosticos.set(p));
+    this.cargarBanda();
+    this.cargarAlertas();
     this.cargarProgramados();
     this.recSvc.sitios().subscribe((p) => this.sitiosLista.set(p.data));
     this.recSvc.listar({ per_page: 300 }).subscribe((p) => this.recursosLista.set(p.data));

@@ -43,6 +43,15 @@ h1 { font-size: 18px; margin: 0; }
 
 table { width: 100%; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+.barra { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.barra .exp-acc { display: flex; gap: 6px; }
+.mono { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
+table.alertas td { font-size: 12px; }
+table.alertas tr.alerta-fallida td { background: color-mix(in srgb, var(--sev-critical, #c0392b) 10%, transparent); }
+.sev { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.sev-critical { color: var(--sev-critical, #c0392b); }
+.sev-warning { color: var(--sev-warning, #e0a400); }
+.sev-info { color: var(--text-dim); }
 td.malo { color: var(--sev-critical); font-weight: 700; }
 
 /* Semáforo de disponibilidad */

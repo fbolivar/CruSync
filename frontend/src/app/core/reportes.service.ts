@@ -2,7 +2,7 @@ import { HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Paginated, Pronostico, ReporteDisponibilidad, ReporteProgramado } from './models';
+import { Paginated, Pronostico, ReporteAlertas, ReporteBanda, ReporteDisponibilidad, ReporteProgramado } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ReportesService {
@@ -14,6 +14,15 @@ export class ReportesService {
 
   pronosticos(): Observable<Pronostico[]> {
     return this.api.get<Pronostico[]>('/pronosticos');
+  }
+
+  /** Consumo de ancho de banda por interfaz (vista previa en pantalla). */
+  banda(rango: string): Observable<ReporteBanda> {
+    return this.api.get<ReporteBanda>('/reportes/banda', { rango });
+  }
+  /** Alertas enviadas con detalle (vista previa en pantalla). */
+  alertas(rango: string): Observable<ReporteAlertas> {
+    return this.api.get<ReporteAlertas>('/reportes/alertas', { rango });
   }
 
   /** Exporta un reporte (ejecutivo/sitio/recurso/servicios) en csv/xlsx/pdf. */

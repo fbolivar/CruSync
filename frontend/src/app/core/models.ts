@@ -103,6 +103,35 @@ export interface Interfaz {
   ts: string;
 }
 
+export interface FilaBandaReporte {
+  nombre: string;
+  tipo_nombre: string;
+  sitio_nombre: string | null;
+  if_name: string;
+  muestras: number;
+  avg_in: number | string | null;
+  avg_out: number | string | null;
+  p95_in: number | string | null;
+  p95_out: number | string | null;
+  max_in: number | string | null;
+  max_out: number | string | null;
+}
+export interface ReporteBanda { rango: string; interfaces: FilaBandaReporte[]; }
+
+export interface FilaAlertaReporte {
+  ts: string;
+  medio: string;
+  canal_nombre: string;
+  destino: string | null;
+  recurso: string;
+  severidad: string | null;
+  evento: string | null;
+  asunto: string | null;
+  estado: string;
+  error: string | null;
+}
+export interface ReporteAlertas { rango: string; alertas: FilaAlertaReporte[]; }
+
 export interface PercentilBanda {
   muestras: number;
   p95_in: number | null;
