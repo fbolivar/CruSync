@@ -116,9 +116,9 @@ Route::middleware('auth.jwt')->group(function () use ($crud) {
     Route::get('reportes/banda', [ReporteController::class, 'banda']);
     Route::get('reportes/alertas', [ReporteController::class, 'alertas']);
 
-    // Exportación de reportes (ejecutivo/sitio/recurso/servicios) en CSV/XLSX/PDF.
+    // Exportación de reportes (ejecutivo/sitio/recurso/servicios/banda/alertas) en CSV/XLSX/PDF.
     Route::get('reportes/export/{tipo}', [ReporteExportController::class, 'export'])
-        ->whereIn('tipo', ['ejecutivo', 'sitio', 'recurso', 'servicios']);
+        ->whereIn('tipo', ['ejecutivo', 'sitio', 'recurso', 'servicios', 'banda', 'alertas']);
 
     // Pronósticos de capacidad (lectura): los calcula el worker.
     Route::get('pronosticos', [PronosticoController::class, 'index']);
