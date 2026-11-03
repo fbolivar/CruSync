@@ -35,6 +35,13 @@ class CanalNotificacionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
+        // validate() conserva de `config` SOLO las sub-claves con regla (min_severidad,
+        // tipos, sitios, horario) y descarta el resto (chat_id, smtp_host, destinatarios,
+        // phone_number_id, access_token-less config...). Reponemos el config COMPLETO del
+        // request para no perder la configuración de conexión del canal.
+        if ($request->has('config')) {
+            $data['config'] = $request->input('config');
+        }
         $secretos = $data['secretos'] ?? null;
         unset($data['secretos']);
 
@@ -56,6 +63,10 @@ class CanalNotificacionController extends Controller
             $canal->setSecretosPlanos($data['secretos'] ?? null);
         }
         unset($data['secretos']);
+        // Conservar el config COMPLETO del request (ver nota en store()).
+        if ($request->has('config')) {
+            $data['config'] = $request->input('config');
+        }
 
         $canal->update($data);
 
