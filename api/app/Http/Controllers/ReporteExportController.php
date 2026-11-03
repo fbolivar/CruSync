@@ -49,6 +49,11 @@ class ReporteExportController extends Controller
 
     private function pdf(array $data): string
     {
+        // Dompdf carga el DOM completo + glifos de fuente en memoria; un informe
+        // tabular grande (p.ej. cientos de alertas) supera el límite por defecto de
+        // PHP (128M). Se eleva solo para esta generación (el servidor tiene RAM de sobra).
+        ini_set('memory_limit', '512M');
+
         $html = view('reportes.pdf', [
             'data'     => $data,
             'logo'     => $this->logoDataUri(),
