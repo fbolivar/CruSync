@@ -1031,10 +1031,89 @@ def disponibilidad(db: Database, rango_seg: int, tipo_id: int | None = None,
         return filas
 
 
+def datos_banda(db: Database, rango_seg: int, tipo_id: int | None = None,
+                sitio_id: int | None = None) -> list[dict[str, Any]]:
+    """Consumo de ancho de banda por interfaz en el periodo (réplica del
+    ReporteController::banda): promedio, percentil 95 y máximo de Mbps in/out
+    sobre interfaces_historico. Base del informe de banda."""
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT r.nombre, t.nombre AS tipo_nombre, s.nombre AS sitio_nombre,
+                   i.if_name, h.*
+            FROM interfaces i
+            JOIN recursos r ON r.id = i.recurso_id
+            JOIN tipos_recurso t ON t.id = r.tipo_id
+            LEFT JOIN sitios s ON s.id = r.sitio_id
+            JOIN LATERAL (
+                SELECT count(*) AS muestras,
+                       round(avg(in_mbps)::numeric, 2)  AS avg_in,
+                       round(avg(out_mbps)::numeric, 2) AS avg_out,
+                       round(percentile_cont(0.95) within group (order by in_mbps)::numeric, 2)  AS p95_in,
+                       round(percentile_cont(0.95) within group (order by out_mbps)::numeric, 2) AS p95_out,
+                       round(max(in_mbps)::numeric, 2)  AS max_in,
+                       round(max(out_mbps)::numeric, 2) AS max_out
+                FROM interfaces_historico hh
+                WHERE hh.recurso_id = i.recurso_id AND hh.if_index = i.if_index
+                  AND hh.ts >= now() - make_interval(secs => %s)
+            ) h ON true
+            WHERE r.activo = true AND h.muestras > 0
+              AND (%s::smallint IS NULL OR r.tipo_id  = %s::smallint)
+              AND (%s::integer  IS NULL OR r.sitio_id = %s::integer)
+            ORDER BY GREATEST(COALESCE(h.p95_in,0), COALESCE(h.p95_out,0)) DESC
+            """,
+            (rango_seg, tipo_id, tipo_id, sitio_id, sitio_id),
+        )
+        salida = []
+        for r in cur.fetchall():
+            salida.append({
+                "nombre": r["nombre"], "tipo_nombre": r["tipo_nombre"],
+                "sitio_nombre": r["sitio_nombre"], "if_name": r["if_name"],
+                "muestras": r["muestras"],
+                "avg_in": float(r["avg_in"]) if r["avg_in"] is not None else None,
+                "avg_out": float(r["avg_out"]) if r["avg_out"] is not None else None,
+                "p95_in": float(r["p95_in"]) if r["p95_in"] is not None else None,
+                "p95_out": float(r["p95_out"]) if r["p95_out"] is not None else None,
+                "max_in": float(r["max_in"]) if r["max_in"] is not None else None,
+                "max_out": float(r["max_out"]) if r["max_out"] is not None else None,
+            })
+        return salida
+
+
+def datos_alertas(db: Database, rango_seg: int, tipo_id: int | None = None,
+                  sitio_id: int | None = None, limite: int = 5000) -> list[dict[str, Any]]:
+    """Alertas (notificaciones) enviadas en el periodo con su detalle: fecha/hora,
+    medio (canal), destino, recurso, severidad, evento, asunto, estado y error.
+    Base del informe de alertas enviadas."""
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT to_char(n.created_at, 'YYYY-MM-DD HH24:MI:SS') AS ts,
+                   cn.tipo AS medio, cn.nombre AS canal_nombre, n.destino,
+                   r.nombre AS recurso, r.tipo_id,
+                   n.payload->>'severidad' AS severidad,
+                   n.payload->>'evento'    AS evento,
+                   n.payload->>'asunto'    AS asunto,
+                   n.estado, n.error
+            FROM notificaciones n
+            JOIN canales_notificacion cn ON cn.id = n.canal_id
+            JOIN incidencias ic ON ic.id = n.incidencia_id
+            JOIN recursos r ON r.id = ic.recurso_id
+            WHERE n.created_at >= now() - make_interval(secs => %s)
+              AND (%s::smallint IS NULL OR r.tipo_id  = %s::smallint)
+              AND (%s::integer  IS NULL OR r.sitio_id = %s::integer)
+            ORDER BY n.created_at DESC
+            LIMIT %s
+            """,
+            (rango_seg, tipo_id, tipo_id, sitio_id, sitio_id, limite),
+        )
+        return cur.fetchall()
+
+
 def reportes_activos(db: Database) -> list[dict[str, Any]]:
     with db.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, nombre, periodo, rango, destinatarios, formato, ultimo_envio_at, "
+            "SELECT id, nombre, tipo, periodo, rango, destinatarios, formato, ultimo_envio_at, "
             "       tipo_id, sitio_id "
             "FROM reportes_programados WHERE activo = true ORDER BY id"
         )

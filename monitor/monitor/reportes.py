@@ -129,6 +129,154 @@ def generar_csv(filas: list[dict]) -> bytes:
     return ("﻿" + cuerpo).encode("utf-8")
 
 
+def _num(v, dec: int = 2) -> str:
+    return f"{v:.{dec}f}" if isinstance(v, (int, float)) else ""
+
+
+# ── Informe de CONSUMO DE ANCHO DE BANDA ──────────────────────────────
+def kpis_banda(filas: list[dict]) -> dict:
+    """Resumen del informe de banda: nº de interfaces y el p95 máximo observado."""
+    p95s = [max(f.get("p95_in") or 0, f.get("p95_out") or 0) for f in filas]
+    return {
+        "interfaces": len(filas),
+        "p95_max": round(max(p95s), 2) if p95s else None,
+        "recursos": len({f.get("nombre") for f in filas}),
+    }
+
+
+def _orden_banda(filas: list[dict]) -> list[dict]:
+    # Mayor consumo (p95) primero: los enlaces más cargados arriba.
+    return sorted(filas, key=lambda f: -max(f.get("p95_in") or 0, f.get("p95_out") or 0))
+
+
+def generar_csv_banda(filas: list[dict]) -> bytes:
+    cab = ["Recurso", "Interfaz", "Sitio", "Prom. entrada (Mbps)", "Prom. salida (Mbps)",
+           "P95 entrada (Mbps)", "P95 salida (Mbps)", "Max entrada (Mbps)",
+           "Max salida (Mbps)", "Muestras"]
+    lineas = [cab]
+    for f in _orden_banda(filas):
+        lineas.append([
+            f.get("nombre", ""), f.get("if_name", ""), f.get("sitio_nombre") or "",
+            _num(f.get("avg_in")), _num(f.get("avg_out")),
+            _num(f.get("p95_in")), _num(f.get("p95_out")),
+            _num(f.get("max_in")), _num(f.get("max_out")), f.get("muestras", 0),
+        ])
+    cuerpo = "\r\n".join(
+        ",".join(f'"{str(c).replace(chr(34), chr(34) * 2)}"' for c in fila) for fila in lineas)
+    return ("﻿" + cuerpo).encode("utf-8")
+
+
+def generar_pdf_banda(filas: list[dict], titulo: str, periodo_txt: str,
+                      generado: str, resumen: dict) -> bytes | None:
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.cell(0, 9, _latin1(titulo), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(90, 90, 90)
+    pdf.cell(0, 5, _latin1(f"Periodo: {periodo_txt}  -  Generado: {generado}"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, _latin1(f"Interfaces: {resumen['interfaces']}  -  "
+                           f"Consumo p95 maximo: {_num(resumen.get('p95_max'))} Mbps"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    cols = [("Recurso", 58), ("Interfaz", 34), ("Sitio", 38), ("Prom. ent.", 26),
+            ("Prom. sal.", 26), ("P95 ent.", 24), ("P95 sal.", 24), ("Max ent.", 24),
+            ("Max sal.", 24)]
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(232, 240, 233)
+    pdf.set_text_color(20, 20, 20)
+    for nombre, w in cols:
+        pdf.cell(w, 7, _latin1(nombre), border=1, fill=True, align="C")
+    pdf.ln()
+    pdf.set_font("Helvetica", "", 8)
+    for f in _orden_banda(filas):
+        valores = [
+            (str(f.get("nombre", ""))[:34], "L"), (str(f.get("if_name", ""))[:20], "L"),
+            (str(f.get("sitio_nombre") or "-")[:22], "L"),
+            (_num(f.get("avg_in")), "R"), (_num(f.get("avg_out")), "R"),
+            (_num(f.get("p95_in")), "R"), (_num(f.get("p95_out")), "R"),
+            (_num(f.get("max_in")), "R"), (_num(f.get("max_out")), "R"),
+        ]
+        for (texto, align), (_n, w) in zip(valores, cols):
+            pdf.cell(w, 6, _latin1(texto), border=1, align=align)
+        pdf.ln()
+    return bytes(pdf.output())
+
+
+# ── Informe de ALERTAS ENVIADAS ───────────────────────────────────────
+def kpis_alertas(filas: list[dict]) -> dict:
+    enviadas = sum(1 for f in filas if f.get("estado") == "enviada")
+    fallidas = sum(1 for f in filas if f.get("estado") == "fallida")
+    criticas = sum(1 for f in filas if f.get("severidad") == "critical")
+    return {"total": len(filas), "enviadas": enviadas, "fallidas": fallidas,
+            "criticas": criticas}
+
+
+def generar_csv_alertas(filas: list[dict]) -> bytes:
+    cab = ["Fecha y hora", "Medio", "Canal", "Destino", "Recurso",
+           "Severidad", "Evento", "Alerta", "Estado", "Error"]
+    lineas = [cab]
+    for f in filas:  # ya vienen ordenadas por fecha desc de la query
+        lineas.append([
+            f.get("ts", ""), f.get("medio", ""), f.get("canal_nombre", ""),
+            f.get("destino") or "", f.get("recurso") or "", f.get("severidad") or "",
+            f.get("evento") or "", f.get("asunto") or "", f.get("estado") or "",
+            f.get("error") or "",
+        ])
+    cuerpo = "\r\n".join(
+        ",".join(f'"{str(c).replace(chr(34), chr(34) * 2)}"' for c in fila) for fila in lineas)
+    return ("﻿" + cuerpo).encode("utf-8")
+
+
+def generar_pdf_alertas(filas: list[dict], titulo: str, periodo_txt: str,
+                        generado: str, resumen: dict) -> bytes | None:
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.cell(0, 9, _latin1(titulo), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(90, 90, 90)
+    pdf.cell(0, 5, _latin1(f"Periodo: {periodo_txt}  -  Generado: {generado}"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, _latin1(f"Alertas: {resumen['total']}  -  Enviadas: {resumen['enviadas']}  -  "
+                           f"Fallidas: {resumen['fallidas']}  -  Criticas: {resumen['criticas']}"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    cols = [("Fecha y hora", 34), ("Medio", 22), ("Recurso", 52), ("Sev.", 18),
+            ("Evento", 24), ("Alerta", 86), ("Estado", 20)]
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(232, 240, 233)
+    pdf.set_text_color(20, 20, 20)
+    for nombre, w in cols:
+        pdf.cell(w, 7, _latin1(nombre), border=1, fill=True, align="C")
+    pdf.ln()
+    pdf.set_font("Helvetica", "", 7)
+    for f in filas:
+        fallida = f.get("estado") == "fallida"
+        pdf.set_fill_color(253, 235, 235)
+        valores = [
+            (str(f.get("ts", ""))[:19], "L"), (str(f.get("medio", "")), "L"),
+            (str(f.get("recurso") or "-")[:30], "L"), (str(f.get("severidad") or "-"), "C"),
+            (str(f.get("evento") or "-")[:14], "L"), (str(f.get("asunto") or "-")[:54], "L"),
+            (str(f.get("estado") or "-"), "C"),
+        ]
+        for (texto, align), (_n, w) in zip(valores, cols):
+            pdf.cell(w, 6, _latin1(texto), border=1, align=align, fill=fallida)
+        pdf.ln()
+    return bytes(pdf.output())
+
+
 def generar_pdf(filas: list[dict], titulo: str, periodo_txt: str,
                 generado: str, resumen: dict) -> bytes | None:
     """PDF tabular con fpdf2. Devuelve None si fpdf2 no está disponible."""

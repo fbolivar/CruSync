@@ -522,6 +522,24 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
   - Se crearon canales placeholder INACTIVOS "Telegram NOC" y "WhatsApp NOC" listos para pegar tokens y
     activar. El motor solo usa canales `activo=true`, así que no envían hasta configurarse.
 
+- ✅ INFORMES REFORZADOS — 4 tipos periódicos (2026-11-03) [migr. 0043] — worker 251 tests + `ng build` OK.
+  El motor de reportes programados (`reportes_programados`, job `enviar_reportes_programados`) pasó de
+  generar solo disponibilidad/SLA a **4 tipos** seleccionables por informe (columna `tipo`):
+  1. **Disponibilidad** (tabla por recurso, % y conteos) — ya existía, ahora es un tipo.
+  2. **Cumplimiento de SLA** — misma data filtrada a los recursos con `sla_objetivo`, resalta incumplen.
+  3. **Consumo de ancho de banda** — por interfaz: promedio/p95/máx de Mbps in/out sobre
+     `interfaces_historico` (repo.datos_banda / ReporteController::banda).
+  4. **Alertas enviadas** — detalle de `notificaciones`: fecha/hora, medio (canal), destino, recurso,
+     severidad, evento, alerta (payload→asunto), estado y error (repo.datos_alertas / ::alertas).
+  - **Worker**: `reportes.py` gana generadores PUROS por tipo (kpis/CSV/PDF de banda y alertas);
+    `_construir_reporte` ramifica por `tipo` en el job (PDF fpdf2, cae a CSV). Respeta periodicidad
+    (diario/semanal/mensual) y filtros tipo_recurso/sitio; se envía por el canal email.
+  - **API**: `GET /reportes/banda` y `/reportes/alertas` (lectura, con alcance por usuario);
+    `ReporteProgramadoController` valida `tipo`.
+  - **UI** (Reportes → Programación): selector "Tipo de informe" en el alta/edición + columna Tipo.
+  - El export on-screen manual (ejecutivo/sitio/recurso/servicios) sigue igual; banda/alertas se
+    consultan por sus endpoints.
+
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.
 

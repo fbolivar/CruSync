@@ -112,6 +112,9 @@ Route::middleware('auth.jwt')->group(function () use ($crud) {
 
     // Reportes (lectura): disponibilidad/SLA por recurso en un periodo.
     Route::get('reportes/disponibilidad', [ReporteController::class, 'disponibilidad']);
+    // Reporte de consumo de ancho de banda (por interfaz) y de alertas enviadas.
+    Route::get('reportes/banda', [ReporteController::class, 'banda']);
+    Route::get('reportes/alertas', [ReporteController::class, 'alertas']);
 
     // Exportación de reportes (ejecutivo/sitio/recurso/servicios) en CSV/XLSX/PDF.
     Route::get('reportes/export/{tipo}', [ReporteExportController::class, 'export'])

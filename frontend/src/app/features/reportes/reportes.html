@@ -207,6 +207,11 @@
     <form class="card form" (ngSubmit)="guardarProg()">
       <div class="grid">
         <label>Nombre <input name="nombre" [(ngModel)]="fProg.nombre" required /></label>
+        <label>Tipo de informe
+          <select name="tipoInforme" [(ngModel)]="fProg.tipo">
+            @for (t of tiposInforme; track t.id) { <option [value]="t.id">{{ t.label }}</option> }
+          </select>
+        </label>
         <label>Periodicidad
           <select name="periodo" [(ngModel)]="fProg.periodo">
             <option value="diario">Diario</option>
@@ -255,13 +260,14 @@
   @if (programados().length > 0) {
     <table>
       <thead><tr>
-        <th>Nombre</th><th>Periodicidad</th><th>Ventana</th><th>Alcance</th><th>Formato</th>
+        <th>Nombre</th><th>Tipo</th><th>Periodicidad</th><th>Ventana</th><th>Alcance</th><th>Formato</th>
         <th>Destinatarios</th><th>Activo</th><th>Último envío</th><th></th>
       </tr></thead>
       <tbody>
         @for (r of programados(); track r.id) {
           <tr>
             <td><b>{{ r.nombre }}</b></td>
+            <td>{{ etiquetaTipoInforme(r.tipo) }}</td>
             <td>{{ r.periodo }}</td>
             <td>{{ r.rango }}</td>
             <td [class.text-dim]="!r.tipo_id && !r.sitio_id">{{ alcanceProg(r) }}</td>

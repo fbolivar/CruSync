@@ -233,6 +233,8 @@ export const TIPOS_COMPONENTE: TipoComponente[] = ['web', 'api', 'gateway', 'cac
 export interface ReporteProgramado {
   id: number;
   nombre: string;
+  /** Tipo de informe. */
+  tipo?: 'disponibilidad' | 'sla' | 'banda' | 'alertas';
   periodo: 'diario' | 'semanal' | 'mensual';
   rango: '24h' | '7d' | '30d';
   destinatarios: string;

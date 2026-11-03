@@ -166,15 +166,27 @@ export class Reportes implements OnInit {
     this.recSvc.listar({ per_page: 300 }).subscribe((p) => this.recursosLista.set(p.data));
   }
 
+  readonly tiposInforme: { id: 'disponibilidad' | 'sla' | 'banda' | 'alertas'; label: string }[] = [
+    { id: 'disponibilidad', label: 'Disponibilidad' },
+    { id: 'sla', label: 'Cumplimiento de SLA' },
+    { id: 'banda', label: 'Consumo de ancho de banda' },
+    { id: 'alertas', label: 'Alertas enviadas' },
+  ];
+
   private progVacio() {
     return {
-      nombre: '', periodo: 'mensual' as 'diario' | 'semanal' | 'mensual',
+      nombre: '', tipo: 'disponibilidad' as 'disponibilidad' | 'sla' | 'banda' | 'alertas',
+      periodo: 'mensual' as 'diario' | 'semanal' | 'mensual',
       rango: '30d' as '24h' | '7d' | '30d', destinatarios: '',
       formato: 'pdf' as 'pdf' | 'csv', activo: true,
       // Filtro del informe ('' = todos). Permite acotarlo a una audiencia
       // (p. ej. enviar al proveedor solo sus enlaces, sin el resto de la red).
       tipo_id: '' as number | '', sitio_id: '' as number | '',
     };
+  }
+
+  etiquetaTipoInforme(t?: string): string {
+    return this.tiposInforme.find((x) => x.id === (t ?? 'disponibilidad'))?.label ?? 'Disponibilidad';
   }
 
   /** Alcance legible de un reporte programado (para la tabla). */
@@ -191,7 +203,7 @@ export class Reportes implements OnInit {
   editarProg(r: ReporteProgramado): void {
     this.creando.set(false); this.editId.set(r.id); this.errorProg.set(null);
     this.fProg = {
-      nombre: r.nombre, periodo: r.periodo, rango: r.rango,
+      nombre: r.nombre, tipo: r.tipo ?? 'disponibilidad', periodo: r.periodo, rango: r.rango,
       destinatarios: r.destinatarios, formato: r.formato, activo: r.activo,
       tipo_id: r.tipo_id ?? '', sitio_id: r.sitio_id ?? '',
     };

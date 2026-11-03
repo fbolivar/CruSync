@@ -59,6 +59,7 @@ class ReporteProgramadoController extends Controller
 
         return [
             'nombre'        => [$req, 'string', 'max:150'],
+            'tipo'          => ['nullable', Rule::in(['disponibilidad', 'sla', 'banda', 'alertas'])],
             'periodo'       => [$req, Rule::in(['diario', 'semanal', 'mensual'])],
             'rango'         => [$req, Rule::in(['24h', '7d', '30d'])],
             'destinatarios' => [$req, 'string', 'max:1000'],

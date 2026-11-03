@@ -2,9 +2,60 @@
 from datetime import datetime, timezone
 
 from monitor.reportes import (
-    alcance_texto, evaluar_sla, generar_csv, generar_pdf, kpis, rango_segundos,
-    reporte_due,
+    alcance_texto, evaluar_sla, generar_csv, generar_csv_alertas, generar_csv_banda,
+    generar_pdf, generar_pdf_alertas, generar_pdf_banda, kpis, kpis_alertas, kpis_banda,
+    rango_segundos, reporte_due,
 )
+
+FILAS_BANDA = [
+    {"nombre": "SW-CORE", "if_name": "Gi1/0/1", "sitio_nombre": "NC", "muestras": 300,
+     "avg_in": 120.5, "avg_out": 40.2, "p95_in": 350.0, "p95_out": 90.0, "max_in": 500.0, "max_out": 120.0},
+    {"nombre": "FW", "if_name": "wan1", "sitio_nombre": None, "muestras": 290,
+     "avg_in": 30.0, "avg_out": 300.0, "p95_in": 60.0, "p95_out": 700.0, "max_in": 80.0, "max_out": 940.0},
+]
+
+FILAS_ALERTAS = [
+    {"ts": "2026-11-03 10:00:00", "medio": "email", "canal_nombre": "Correo NOC",
+     "destino": "noc@x.co", "recurso": "SW-CORE", "severidad": "critical", "evento": "apertura",
+     "asunto": "[CRITICAL] ABIERTA: SW-CORE", "estado": "enviada", "error": None},
+    {"ts": "2026-11-03 09:00:00", "medio": "telegram", "canal_nombre": "Telegram NOC",
+     "destino": "-100", "recurso": "FW", "severidad": "warning", "evento": "cierre",
+     "asunto": "RESUELTA: FW", "estado": "fallida", "error": "timeout"},
+]
+
+
+def test_kpis_banda():
+    k = kpis_banda(FILAS_BANDA)
+    assert k["interfaces"] == 2 and k["recursos"] == 2
+    assert k["p95_max"] == 700.0  # el peor p95 (salida del FW)
+
+
+def test_csv_banda_ordena_por_p95_desc():
+    csv = generar_csv_banda(FILAS_BANDA).decode("utf-8")
+    assert "Recurso" in csv and "P95 entrada (Mbps)" in csv
+    # el FW (p95 700) va antes que SW-CORE (p95 350)
+    assert csv.index("FW") < csv.index("SW-CORE")
+
+
+def test_pdf_banda_bytes_o_none():
+    out = generar_pdf_banda(FILAS_BANDA, "T", "7d", "2026-11-03", kpis_banda(FILAS_BANDA))
+    assert out is None or (isinstance(out, bytes) and out[:4] == b"%PDF")
+
+
+def test_kpis_alertas():
+    k = kpis_alertas(FILAS_ALERTAS)
+    assert k["total"] == 2 and k["enviadas"] == 1 and k["fallidas"] == 1 and k["criticas"] == 1
+
+
+def test_csv_alertas_cabecera_y_detalle():
+    csv = generar_csv_alertas(FILAS_ALERTAS).decode("utf-8")
+    assert "Fecha y hora" in csv and "Medio" in csv
+    assert "telegram" in csv and "timeout" in csv  # medio y error presentes
+
+
+def test_pdf_alertas_bytes_o_none():
+    out = generar_pdf_alertas(FILAS_ALERTAS, "T", "7d", "2026-11-03", kpis_alertas(FILAS_ALERTAS))
+    assert out is None or (isinstance(out, bytes) and out[:4] == b"%PDF")
 
 
 def _dt(y, m, d, h=6):

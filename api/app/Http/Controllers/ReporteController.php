@@ -70,6 +70,78 @@ class ReporteController extends Controller
     }
 
     /**
+     * Consumo de ancho de banda por interfaz en un periodo: promedio, percentil 95
+     * y máximo de Mbps in/out sobre interfaces_historico. (Fuente del informe de banda.)
+     */
+    public function banda(Request $request): JsonResponse
+    {
+        $rango = $request->query('rango', '7d');
+        $segundos = ['24h' => 86400, '7d' => 604800, '30d' => 2592000][$rango] ?? 604800;
+        $desde = now()->subSeconds($segundos)->toDateTimeString();
+        $alc = $this->alcanceSql();
+
+        $filas = DB::select(
+            "SELECT r.nombre, t.nombre AS tipo_nombre, s.nombre AS sitio_nombre,
+                    i.if_name, h.muestras, h.avg_in, h.avg_out, h.p95_in, h.p95_out,
+                    h.max_in, h.max_out
+             FROM interfaces i
+             JOIN recursos r ON r.id = i.recurso_id
+             JOIN tipos_recurso t ON t.id = r.tipo_id
+             LEFT JOIN sitios s ON s.id = r.sitio_id
+             JOIN LATERAL (
+                 SELECT count(*) AS muestras,
+                        round(avg(in_mbps)::numeric, 2)  AS avg_in,
+                        round(avg(out_mbps)::numeric, 2) AS avg_out,
+                        round(percentile_cont(0.95) within group (order by in_mbps)::numeric, 2)  AS p95_in,
+                        round(percentile_cont(0.95) within group (order by out_mbps)::numeric, 2) AS p95_out,
+                        round(max(in_mbps)::numeric, 2)  AS max_in,
+                        round(max(out_mbps)::numeric, 2) AS max_out
+                 FROM interfaces_historico hh
+                 WHERE hh.recurso_id = i.recurso_id AND hh.if_index = i.if_index AND hh.ts >= ?
+             ) h ON true
+             WHERE r.activo = true AND h.muestras > 0
+               AND (?::int[] IS NULL OR r.sitio_id = ANY(?::int[]))
+             ORDER BY GREATEST(COALESCE(h.p95_in,0), COALESCE(h.p95_out,0)) DESC",
+            [$desde, $alc, $alc]
+        );
+
+        return response()->json(['rango' => $rango, 'interfaces' => $filas]);
+    }
+
+    /**
+     * Alertas (notificaciones) enviadas en un periodo con su detalle: fecha/hora,
+     * medio, canal, destino, recurso, severidad, evento, alerta, estado y error.
+     */
+    public function alertas(Request $request): JsonResponse
+    {
+        $rango = $request->query('rango', '7d');
+        $segundos = ['24h' => 86400, '7d' => 604800, '30d' => 2592000][$rango] ?? 604800;
+        $desde = now()->subSeconds($segundos)->toDateTimeString();
+        $alc = $this->alcanceSql();
+
+        $filas = DB::select(
+            "SELECT to_char(n.created_at, 'YYYY-MM-DD HH24:MI:SS') AS ts,
+                    cn.tipo AS medio, cn.nombre AS canal_nombre, n.destino,
+                    r.nombre AS recurso,
+                    n.payload->>'severidad' AS severidad,
+                    n.payload->>'evento'    AS evento,
+                    n.payload->>'asunto'    AS asunto,
+                    n.estado, n.error
+             FROM notificaciones n
+             JOIN canales_notificacion cn ON cn.id = n.canal_id
+             JOIN incidencias ic ON ic.id = n.incidencia_id
+             JOIN recursos r ON r.id = ic.recurso_id
+             WHERE n.created_at >= ?
+               AND (?::int[] IS NULL OR r.sitio_id = ANY(?::int[]))
+             ORDER BY n.created_at DESC
+             LIMIT 5000",
+            [$desde, $alc, $alc]
+        );
+
+        return response()->json(['rango' => $rango, 'alertas' => $filas]);
+    }
+
+    /**
      * Rangos de más de 30 días: se suman los días del histórico consolidado
      * (`disponibilidad_diaria`), que sobrevive a la purga de `chequeos`.
      * Es la misma fórmula: solo cambia de dónde salen los conteos.

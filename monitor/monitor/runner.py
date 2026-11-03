@@ -397,6 +397,78 @@ def pronosticar_capacidad(db: Database, settings: Settings) -> None:
                     f"Revisa capacidad/limpieza antes de que se agote.", "warning")
 
 
+def _construir_reporte(db, tipo, r, rango_seg, rango_txt, generado, es_pdf, rep):
+    """Arma un informe programado según su `tipo`. Devuelve
+    (titulo, periodo_txt, cuerpo, datos, nombre_archivo, subtype) o None si no hay
+    datos. Centraliza los 4 tipos: disponibilidad · sla · banda · alertas."""
+    tipo_id, sitio_id = r.get("tipo_id"), r.get("sitio_id")
+    nombre_rep = r["nombre"]
+
+    if tipo in ("disponibilidad", "sla"):
+        filas = repo.disponibilidad(db, rango_seg, tipo_id, sitio_id)
+        if tipo == "sla":  # solo los que tienen objetivo definido (lo exigible)
+            filas = [f for f in filas if f.get("sla_objetivo") is not None]
+        if not filas:
+            return None
+        resumen = rep.kpis(filas)
+        periodo_txt = f"{rango_txt} · {rep.alcance_texto(filas, tipo_id, sitio_id)}"
+        titulo = (f"Reporte de cumplimiento de SLA — {nombre_rep}" if tipo == "sla"
+                  else f"Reporte de disponibilidad — {nombre_rep}")
+        datos = rep.generar_pdf(filas, titulo, periodo_txt, generado, resumen) if es_pdf else None
+        base = "sla" if tipo == "sla" else "disponibilidad"
+        if datos is not None:
+            nombre, subtype = f"{base}_{r['rango']}.pdf", "pdf"
+        else:
+            datos, nombre, subtype = rep.generar_csv(filas), f"{base}_{r['rango']}.csv", "csv"
+        prom = resumen["disponibilidad_promedio"]
+        cuerpo = (f"{titulo}\n\nPeriodo: {periodo_txt}\nGenerado: {generado}\n\n"
+                  f"Recursos: {resumen['recursos']}\n"
+                  f"Disponibilidad promedio: {('%.3f%%' % prom) if prom is not None else 'sin datos'}\n"
+                  f"Incumplen SLA: {resumen['incumplen']} de {resumen['con_objetivo']} con objetivo\n"
+                  f"Incidencias en el periodo: {resumen['incidencias']}\n\n"
+                  f"Se adjunta el detalle ({nombre}).\n\nSIMON — Sistema Integral de Monitoreo")
+        return titulo, periodo_txt, cuerpo, datos, nombre, subtype
+
+    if tipo == "banda":
+        filas = repo.datos_banda(db, rango_seg, tipo_id, sitio_id)
+        if not filas:
+            return None
+        resumen = rep.kpis_banda(filas)
+        periodo_txt = f"{rango_txt} · {rep.alcance_texto(filas, tipo_id, sitio_id)}"
+        titulo = f"Reporte de consumo de ancho de banda — {nombre_rep}"
+        datos = rep.generar_pdf_banda(filas, titulo, periodo_txt, generado, resumen) if es_pdf else None
+        if datos is not None:
+            nombre, subtype = f"banda_{r['rango']}.pdf", "pdf"
+        else:
+            datos, nombre, subtype = rep.generar_csv_banda(filas), f"banda_{r['rango']}.csv", "csv"
+        cuerpo = (f"{titulo}\n\nPeriodo: {periodo_txt}\nGenerado: {generado}\n\n"
+                  f"Interfaces: {resumen['interfaces']}\n"
+                  f"Consumo p95 máximo: {resumen.get('p95_max')} Mbps\n\n"
+                  f"Se adjunta el detalle por interfaz ({nombre}).\n\n"
+                  f"SIMON — Sistema Integral de Monitoreo")
+        return titulo, periodo_txt, cuerpo, datos, nombre, subtype
+
+    if tipo == "alertas":
+        filas = repo.datos_alertas(db, rango_seg, tipo_id, sitio_id)
+        if not filas:
+            return None
+        resumen = rep.kpis_alertas(filas)
+        periodo_txt = f"{rango_txt}"
+        titulo = f"Reporte de alertas enviadas — {nombre_rep}"
+        datos = rep.generar_pdf_alertas(filas, titulo, periodo_txt, generado, resumen) if es_pdf else None
+        if datos is not None:
+            nombre, subtype = f"alertas_{r['rango']}.pdf", "pdf"
+        else:
+            datos, nombre, subtype = rep.generar_csv_alertas(filas), f"alertas_{r['rango']}.csv", "csv"
+        cuerpo = (f"{titulo}\n\nPeriodo: {periodo_txt}\nGenerado: {generado}\n\n"
+                  f"Alertas: {resumen['total']}  (enviadas: {resumen['enviadas']}, "
+                  f"fallidas: {resumen['fallidas']}, críticas: {resumen['criticas']})\n\n"
+                  f"Se adjunta el detalle ({nombre}).\n\nSIMON — Sistema Integral de Monitoreo")
+        return titulo, periodo_txt, cuerpo, datos, nombre, subtype
+
+    return None
+
+
 def enviar_reportes_programados(db: Database, settings: Settings) -> None:
     """Job diario: envía por correo los reportes de disponibilidad cuya periodicidad
     toca (diario/semanal/mensual), generando PDF (o CSV) y adjuntándolo."""
@@ -423,34 +495,17 @@ def enviar_reportes_programados(db: Database, settings: Settings) -> None:
         if not destinatarios:
             continue
 
-        filas = repo.disponibilidad(db, rep.rango_segundos(r["rango"]),
-                                    r.get("tipo_id"), r.get("sitio_id"))
-        if not filas:
-            log.warning("Reporte '%s': el filtro no devolvió recursos; no se envía.", r["nombre"])
-            continue
-        resumen = rep.kpis(filas)
-        # El informe debe declarar SU ALCANCE en el encabezado: si va acotado (p. ej.
-        # al proveedor, solo sus enlaces), quien lo recibe tiene que ver qué cubre.
-        periodo_txt = (f"{rep.RANGO_ETIQUETA.get(r['rango'], r['rango'])} · "
-                       f"{rep.alcance_texto(filas, r.get('tipo_id'), r.get('sitio_id'))}")
+        tipo = r.get("tipo") or "disponibilidad"
+        rango_seg = rep.rango_segundos(r["rango"])
         generado = ahora.strftime("%Y-%m-%d %H:%M UTC")
-        titulo = f"Reporte de disponibilidad — {r['nombre']}"
+        rango_txt = rep.RANGO_ETIQUETA.get(r["rango"], r["rango"])
+        es_pdf = r["formato"] == "pdf"
+        resultado = _construir_reporte(db, tipo, r, rango_seg, rango_txt, generado, es_pdf, rep)
+        if resultado is None:
+            log.warning("Reporte '%s' (%s): sin datos en el periodo; no se envía.", r["nombre"], tipo)
+            continue
+        titulo, periodo_txt, cuerpo, datos, nombre, subtype = resultado
 
-        datos = rep.generar_pdf(filas, titulo, periodo_txt, generado, resumen) if r["formato"] == "pdf" else None
-        if datos is not None:
-            nombre, subtype = f"disponibilidad_{r['rango']}.pdf", "pdf"
-        else:  # CSV (elegido, o fallback si fpdf2 no está)
-            datos, nombre, subtype = rep.generar_csv(filas), f"disponibilidad_{r['rango']}.csv", "csv"
-
-        prom = resumen["disponibilidad_promedio"]
-        cuerpo = (
-            f"{titulo}\n\nPeriodo: {periodo_txt}\nGenerado: {generado}\n\n"
-            f"Recursos: {resumen['recursos']}\n"
-            f"Disponibilidad promedio: {('%.3f%%' % prom) if prom is not None else 'sin datos'}\n"
-            f"Incidencias en el periodo: {resumen['incidencias']}\n\n"
-            f"Se adjunta el detalle por recurso ({nombre}).\n\n"
-            f"SIMON — Sistema Integral de Monitoreo"
-        )
         ok, err, destino = senders.enviar_email_adjunto(
             email, destinatarios, f"[SIMON] {titulo} ({periodo_txt})", cuerpo, nombre, datos, subtype)
         if ok:
