@@ -575,6 +575,11 @@ hardware Redfish (Dell R640 en id 24), sintéticos (transacción 2 pasos), backu
     con coords (propias o heredadas de la sede), coloreado por estado, clic → detalle; panel lateral
     lista los enlaces con alerta (caído/degradado). KPIs por vista.
   - La plantilla CSV del importador y la ayuda incluyen latitud/longitud.
+  - ZOOM/PANEO + CLUSTERING (2026-11-03): el SVG del mapa tiene zoom (rueda/botones +/-/reset) y paneo
+    (arrastrar); viewBox por signal. En "Por enlace", los puntos se AGRUPAN por cercanía en una rejilla
+    cuyo tamaño depende del zoom (al acercar los grupos se separan); el clúster muestra el conteo y el
+    peor estado (semáforo), clic en un clúster acerca. Marcadores y textos escalan por k=view.w/W para
+    conservar tamaño visual; strokes con vector-effect non-scaling-stroke. Maneja los 1200 puntos densos.
 
 Nota de numeración: el usuario llamó "FASE 3" a los workers (en el plan original eran FASE 4).
 Orden real ejecutado: estructura → datos → API → workers → frontend → notificaciones → despliegue → mejoras.

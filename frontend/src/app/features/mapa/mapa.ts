@@ -24,6 +24,16 @@ interface MarcadorEnlace {
   propia: boolean;         // true = coords propias del enlace; false = heredó las de la sede
 }
 
+interface Cluster {
+  x: number;
+  y: number;
+  n: number;                 // nº de enlaces agrupados
+  estado: Estado;            // peor estado del grupo (semáforo)
+  down: number;
+  degraded: number;
+  items: MarcadorEnlace[];
+}
+
 const PESO: Record<Estado, number> = { down: 5, degraded: 4, unknown: 3, maintenance: 2, up: 1 };
 
 @Component({
@@ -51,6 +61,58 @@ export class Mapa implements OnInit {
   vista = signal<'sedes' | 'enlaces'>('sedes');
 
   departamentos = COLOMBIA_DEPARTAMENTOS;
+
+  // ── Zoom / paneo (viewBox del SVG) ──
+  view = signal({ x: 0, y: 0, w: this.W, h: this.H });
+  viewBox = computed(() => { const v = this.view(); return `${v.x} ${v.y} ${v.w} ${v.h}`; });
+  private readonly MINW = 30;   // acercamiento máximo (ancho mínimo del viewBox)
+  // Factor de escala actual (1 = vista completa; <1 = acercado). Se usa para que
+  // los marcadores conserven tamaño visual al hacer zoom.
+  k = computed(() => this.view().w / this.W);
+  private drag: { px: number; py: number; vx: number; vy: number; w: number; h: number } | null = null;
+  arrastrando = signal(false);
+
+  private aplicarZoom(factor: number, cx: number, cy: number): void {
+    const v = this.view();
+    const w = Math.max(this.MINW, Math.min(v.w * factor, this.W));
+    const h = w * (this.H / this.W);
+    let x = cx - (cx - v.x) * (w / v.w);
+    let y = cy - (cy - v.y) * (h / v.h);
+    x = Math.max(0, Math.min(x, this.W - w));
+    y = Math.max(0, Math.min(y, this.H - h));
+    this.view.set({ x, y, w, h });
+  }
+  zoomBoton(factor: number): void {
+    const v = this.view();
+    this.aplicarZoom(factor, v.x + v.w / 2, v.y + v.h / 2);
+  }
+  resetZoom(): void { this.view.set({ x: 0, y: 0, w: this.W, h: this.H }); }
+
+  onWheel(ev: WheelEvent): void {
+    ev.preventDefault();
+    const r = (ev.currentTarget as Element).getBoundingClientRect();
+    const v = this.view();
+    const cx = v.x + ((ev.clientX - r.left) / r.width) * v.w;
+    const cy = v.y + ((ev.clientY - r.top) / r.height) * v.h;
+    this.aplicarZoom(ev.deltaY < 0 ? 0.8 : 1.25, cx, cy);
+  }
+  onPointerDown(ev: PointerEvent): void {
+    const r = (ev.currentTarget as Element).getBoundingClientRect();
+    const v = this.view();
+    this.drag = { px: ev.clientX, py: ev.clientY, vx: v.x, vy: v.y, w: r.width, h: r.height };
+    this.arrastrando.set(true);
+    (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+  }
+  onPointerMove(ev: PointerEvent): void {
+    if (!this.drag) return;
+    const v = this.view();
+    const dx = ((ev.clientX - this.drag.px) / this.drag.w) * v.w;
+    const dy = ((ev.clientY - this.drag.py) / this.drag.h) * v.h;
+    const x = Math.max(0, Math.min(this.drag.vx - dx, this.W - v.w));
+    const y = Math.max(0, Math.min(this.drag.vy - dy, this.H - v.h));
+    this.view.set({ ...v, x, y });
+  }
+  onPointerUp(): void { this.drag = null; this.arrastrando.set(false); }
 
   private sitiosMap = computed(() => {
     const m = new Map<number, Sitio>();
@@ -110,6 +172,37 @@ export class Mapa implements OnInit {
       .filter((e) => e.estado_actual === 'down' || e.estado_actual === 'degraded')
       .sort((a, b) => PESO[b.estado_actual] - PESO[a.estado_actual]
         || a.nombre.localeCompare(b.nombre)));
+  // Agrupamiento por cercanía: rejilla cuyo tamaño de celda depende del zoom
+  // (al acercar, las celdas se achican y los grupos se separan). Estable al panear
+  // porque la rejilla es absoluta. Un grupo de 1 se dibuja como marcador simple.
+  clusters = computed<Cluster[]>(() => {
+    const cell = Math.max(5, this.view().w / 16);
+    const grid = new Map<string, Cluster>();
+    for (const m of this.marcadoresEnlaces()) {
+      const key = Math.floor(m.x / cell) + '_' + Math.floor(m.y / cell);
+      let g = grid.get(key);
+      if (!g) { g = { x: 0, y: 0, n: 0, estado: 'up', down: 0, degraded: 0, items: [] }; grid.set(key, g); }
+      g.x += m.x; g.y += m.y; g.n++;
+      if (PESO[m.estado] > PESO[g.estado]) g.estado = m.estado;
+      if (m.estado === 'down') g.down++;
+      if (m.estado === 'degraded') g.degraded++;
+      g.items.push(m);
+    }
+    const out = [...grid.values()];
+    for (const g of out) { g.x /= g.n; g.y /= g.n; }
+    return out.sort((a, b) => PESO[a.estado] - PESO[b.estado]); // problemáticos encima
+  });
+
+  /** Clic en un clúster: acercar centrado en él para que se separe. */
+  acercarCluster(c: Cluster): void {
+    this.aplicarZoom(0.45, c.x, c.y);
+  }
+  radioCluster(c: Cluster): number {
+    const base = c.n === 1 ? (c.estado === 'down' || c.estado === 'degraded' ? 4.2 : 3)
+                           : 7 + Math.min(10, Math.sqrt(c.n) * 2.2);
+    return base * this.k();  // conserva tamaño visual al hacer zoom
+  }
+
   enlacesConCoord = computed(() => this.marcadoresEnlaces().length);
   enlacesCaidos = computed(() => this.enlaces().filter((e) => e.estado_actual === 'down').length);
   enlacesDegradados = computed(() => this.enlaces().filter((e) => e.estado_actual === 'degraded').length);
@@ -139,11 +232,8 @@ export class Mapa implements OnInit {
   }
 
   radio(s: Sede): number {
-    if (s.down > 0 || s.degraded > 0) return 10;
-    return Math.max(5, Math.min(11, 4 + Math.sqrt(s.total) * 2));
-  }
-  radioEnlace(m: MarcadorEnlace): number {
-    return m.estado === 'down' || m.estado === 'degraded' ? 4.2 : 3;
+    const base = (s.down > 0 || s.degraded > 0) ? 10 : Math.max(5, Math.min(11, 4 + Math.sqrt(s.total) * 2));
+    return base * this.k();  // conserva tamaño visual al hacer zoom
   }
   hayProblema(s: Sede): boolean { return s.down > 0 || s.degraded > 0; }
 }

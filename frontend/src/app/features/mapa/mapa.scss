@@ -34,11 +34,20 @@ svg { width: 100%; max-width: 470px; height: auto; }
 .pais .dep:hover { fill: #b6d8be; }
 
 .sede { stroke: #fff; stroke-width: 1.5; transition: r .12s; }
-.enlace { stroke: #fff; stroke-width: 0.8; transition: r .12s; cursor: pointer; }
-g.activo .enlace { stroke: #111; stroke-width: 1.8; }
+.enlace { stroke: #fff; stroke-width: 1.2; transition: r .12s; cursor: pointer; }
+g.activo .enlace { stroke: #111; stroke-width: 2; }
+.grupo { stroke: #fff; stroke-width: 1.4; cursor: pointer; }
+g.cluster:hover .grupo { stroke: #111; stroke-width: 2; }
 .toggle { display: flex; gap: 6px; }
 .toggle .btn { padding: 4px 12px; }
 .vacio { padding: 14px; }
+
+.lienzo { position: relative; }
+.lienzo svg { touch-action: none; cursor: grab; }
+.lienzo svg.arrastrando { cursor: grabbing; }
+.zoom-ctrl { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; flex-direction: column; gap: 4px; }
+.zoom-ctrl .btn { width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1;
+  background: var(--bg-1, #fff); border: 1px solid var(--border, #cfe3d4); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .num { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 a { cursor: pointer; }
 g.activo .sede { stroke: #111; stroke-width: 2.5; }

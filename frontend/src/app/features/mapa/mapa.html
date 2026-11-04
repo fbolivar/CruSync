@@ -40,7 +40,16 @@
   <div class="grid">
     <!-- Mapa geográfico -->
     <div class="lienzo card">
-      <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" preserveAspectRatio="xMidYMid meet">
+      <div class="zoom-ctrl">
+        <button class="btn" (click)="zoomBoton(0.8)" title="Acercar">+</button>
+        <button class="btn" (click)="zoomBoton(1.25)" title="Alejar">−</button>
+        <button class="btn" (click)="resetZoom()" title="Vista completa">⤢</button>
+      </div>
+      <svg [attr.viewBox]="viewBox()" preserveAspectRatio="xMidYMid meet"
+           [class.arrastrando]="arrastrando()"
+           (wheel)="onWheel($event)" (pointerdown)="onPointerDown($event)"
+           (pointermove)="onPointerMove($event)" (pointerup)="onPointerUp()"
+           (pointerleave)="onPointerUp()">
         <defs>
           <filter id="sombraPais" x="-6%" y="-6%" width="112%" height="112%">
             <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#1a3a2a" flood-opacity="0.22" />
@@ -60,32 +69,45 @@
                (mouseenter)="hoverId.set(m.sitio.id)" (mouseleave)="hoverId.set(null)">
               <g [class.activo]="hoverId() === m.sitio.id">
                 @if (hayProblema(m)) {
-                  <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m) + 5"
+                  <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m) + 5 * k()"
                           [attr.fill]="color(m.estado)" class="pulso" />
                 }
                 <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radio(m)"
-                        [attr.fill]="color(m.estado)" class="sede" />
+                        [attr.fill]="color(m.estado)" class="sede" vector-effect="non-scaling-stroke" />
                 @if (hayProblema(m) || m.total > 1) {
-                  <text [attr.x]="m.x" [attr.y]="m.y" class="num">{{ m.total }}</text>
+                  <text [attr.x]="m.x" [attr.y]="m.y" class="num" [style.font-size.px]="9 * k()">{{ m.total }}</text>
                 }
                 <title>{{ m.sitio.nombre }} — {{ m.total }} recurso(s){{ m.down ? ', ' + m.down + ' caído(s)' : '' }}</title>
               </g>
             </a>
           }
         } @else {
-          @for (m of marcadoresEnlaces(); track m.enlace.id) {
-            <a [routerLink]="['/recursos', m.enlace.id]"
-               (mouseenter)="hoverEnlace.set(m.enlace.id)" (mouseleave)="hoverEnlace.set(null)">
-              <g [class.activo]="hoverEnlace() === m.enlace.id">
-                @if (m.estado === 'down' || m.estado === 'degraded') {
-                  <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radioEnlace(m) + 4"
-                          [attr.fill]="color(m.estado)" class="pulso" />
+          @for (c of clusters(); track $index) {
+            @if (c.n === 1) {
+              <a [routerLink]="['/recursos', c.items[0].enlace.id]"
+                 (mouseenter)="hoverEnlace.set(c.items[0].enlace.id)" (mouseleave)="hoverEnlace.set(null)">
+                <g [class.activo]="hoverEnlace() === c.items[0].enlace.id">
+                  @if (c.estado === 'down' || c.estado === 'degraded') {
+                    <circle [attr.cx]="c.x" [attr.cy]="c.y" [attr.r]="radioCluster(c) + 4 * k()"
+                            [attr.fill]="color(c.estado)" class="pulso" />
+                  }
+                  <circle [attr.cx]="c.x" [attr.cy]="c.y" [attr.r]="radioCluster(c)"
+                          [attr.fill]="color(c.estado)" class="enlace" vector-effect="non-scaling-stroke" />
+                  <title>{{ c.items[0].enlace.nombre }} — {{ c.estado }}{{ c.items[0].propia ? '' : ' (ubicación de la sede)' }}</title>
+                </g>
+              </a>
+            } @else {
+              <g class="cluster" (click)="acercarCluster(c)">
+                @if (c.down > 0 || c.degraded > 0) {
+                  <circle [attr.cx]="c.x" [attr.cy]="c.y" [attr.r]="radioCluster(c) + 3 * k()"
+                          [attr.fill]="color(c.estado)" class="pulso" />
                 }
-                <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="radioEnlace(m)"
-                        [attr.fill]="color(m.estado)" class="enlace" />
-                <title>{{ m.enlace.nombre }} — {{ m.estado }}{{ m.propia ? '' : ' (ubicación de la sede)' }}</title>
+                <circle [attr.cx]="c.x" [attr.cy]="c.y" [attr.r]="radioCluster(c)"
+                        [attr.fill]="color(c.estado)" class="grupo" vector-effect="non-scaling-stroke" />
+                <text [attr.x]="c.x" [attr.y]="c.y" class="num" [style.font-size.px]="9 * k()">{{ c.n }}</text>
+                <title>{{ c.n }} enlaces{{ c.down ? ' · ' + c.down + ' caído(s)' : '' }}{{ c.degraded ? ' · ' + c.degraded + ' degradado(s)' : '' }} — clic para acercar</title>
               </g>
-            </a>
+            }
           }
         }
       </svg>
